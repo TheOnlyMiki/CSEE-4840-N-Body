@@ -62,6 +62,8 @@ module nbody_mem #(
     logic [DATA_W-1:0] ax_mem [MAX_BODIES];
     logic [DATA_W-1:0] ay_mem [MAX_BODIES];
 
+    integer lane;
+
     always_ff @(posedge clk) begin
         if (cpu_body_we) begin
             x_mem[cpu_body_waddr]  <= cpu_x;
@@ -80,7 +82,7 @@ module nbody_mem #(
             vy_mem[body_update_addr] <= body_update_vy;
         end
 
-        for (int lane = 0; lane < 4; lane++) begin
+        for (lane = 0; lane < 4; lane = lane + 1) begin
             if (accel_we[lane]) begin
                 ax_mem[accel_waddr[lane]] <= accel_ax[lane];
                 ay_mem[accel_waddr[lane]] <= accel_ay[lane];

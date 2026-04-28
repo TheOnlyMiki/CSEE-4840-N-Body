@@ -58,6 +58,7 @@ module four_core_wrapper #(
 );
 
     localparam int PIPE_LAT = 18;
+    integer i;
 
     // ============================================================
     // local i-body memory (16 entries)
@@ -171,7 +172,7 @@ module four_core_wrapper #(
     );
 
     task automatic clear_wrapper_state;
-        foreach (acc_x_bank[i]) begin
+        for (i = 0; i < 16; i = i + 1) begin
             acc_x_bank[i] <= '0;
             acc_y_bank[i] <= '0;
         end
@@ -183,7 +184,7 @@ module four_core_wrapper #(
         prev2_x_d0 <= '0; prev2_x_d1 <= '0; prev2_y_d0 <= '0; prev2_y_d1 <= '0;
         prev3_x_d0 <= '0; prev3_x_d1 <= '0; prev3_y_d0 <= '0; prev3_y_d1 <= '0;
 
-        foreach (vld_pipe[i]) begin
+        for (i = 0; i < PIPE_LAT; i = i + 1) begin
             vld_pipe[i] <= 1'b0;
             grp_pipe[i] <= 2'd0;
         end
@@ -194,7 +195,7 @@ module four_core_wrapper #(
     // ============================================================
     always_ff @(posedge i_clk or negedge i_rst) begin
         if (!i_rst) begin
-            foreach (i_x_mem[i]) begin
+            for (i = 0; i < 16; i = i + 1) begin
                 i_x_mem[i] <= '0;
                 i_y_mem[i] <= '0;
             end
