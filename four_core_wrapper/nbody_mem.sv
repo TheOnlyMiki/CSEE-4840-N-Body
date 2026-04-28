@@ -1,6 +1,6 @@
 module nbody_mem #(
-    parameter int MAX_BODIES = 256,
-    localparam int PTR_W = $clog2(MAX_BODIES)
+    parameter integer MAX_BODIES = 256,
+    parameter integer PTR_W = 8
 ) (
     input  logic clk,
 
@@ -61,6 +61,8 @@ module nbody_mem #(
     logic [26:0] ax_mem [MAX_BODIES];
     logic [26:0] ay_mem [MAX_BODIES];
 
+    integer lane;
+
     always_ff @(posedge clk) begin
         if (cpu_body_we) begin
             x_mem[cpu_body_waddr]  <= cpu_x;
@@ -79,7 +81,7 @@ module nbody_mem #(
             vy_mem[body_update_addr] <= body_update_vy;
         end
 
-        for (int lane = 0; lane < 4; lane++) begin
+        for (lane = 0; lane < 4; lane = lane + 1) begin
             if (accel_we[lane]) begin
                 ax_mem[accel_waddr[lane]] <= accel_ax[lane];
                 ay_mem[accel_waddr[lane]] <= accel_ay[lane];
