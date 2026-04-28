@@ -1,59 +1,63 @@
-module fourcore_bcj_datapath (
+module fourcore_bcj_datapath #(
+    parameter int DATA_W = 27
+) (
     input  logic        i_clk,
     input  logic        i_rst,
 
     // ============================================================
     // shared j position, per-lane j mass
     // ============================================================
-    input  logic [15:0] i_j_x,
-    input  logic [15:0] i_j_y,
-    input  logic [15:0] i_j0_m,
-    input  logic [15:0] i_j1_m,
-    input  logic [15:0] i_j2_m,
-    input  logic [15:0] i_j3_m,
+    input  logic [DATA_W-1:0] i_j_x,
+    input  logic [DATA_W-1:0] i_j_y,
+    input  logic [DATA_W-1:0] i_j0_m,
+    input  logic [DATA_W-1:0] i_j1_m,
+    input  logic [DATA_W-1:0] i_j2_m,
+    input  logic [DATA_W-1:0] i_j3_m,
 
     // ============================================================
     // lane 0
     // ============================================================
-    input  logic [15:0] i_i0_x,
-    input  logic [15:0] i_i0_y,
-    input  logic [26:0] i_prev0_x,
-    input  logic [26:0] i_prev0_y,
-    output logic [26:0] o_out0_x,
-    output logic [26:0] o_out0_y,
+    input  logic [DATA_W-1:0] i_i0_x,
+    input  logic [DATA_W-1:0] i_i0_y,
+    input  logic [DATA_W-1:0] i_prev0_x,
+    input  logic [DATA_W-1:0] i_prev0_y,
+    output logic [DATA_W-1:0] o_out0_x,
+    output logic [DATA_W-1:0] o_out0_y,
 
     // ============================================================
     // lane 1
     // ============================================================
-    input  logic [15:0] i_i1_x,
-    input  logic [15:0] i_i1_y,
-    input  logic [26:0] i_prev1_x,
-    input  logic [26:0] i_prev1_y,
-    output logic [26:0] o_out1_x,
-    output logic [26:0] o_out1_y,
+    input  logic [DATA_W-1:0] i_i1_x,
+    input  logic [DATA_W-1:0] i_i1_y,
+    input  logic [DATA_W-1:0] i_prev1_x,
+    input  logic [DATA_W-1:0] i_prev1_y,
+    output logic [DATA_W-1:0] o_out1_x,
+    output logic [DATA_W-1:0] o_out1_y,
 
     // ============================================================
     // lane 2
     // ============================================================
-    input  logic [15:0] i_i2_x,
-    input  logic [15:0] i_i2_y,
-    input  logic [26:0] i_prev2_x,
-    input  logic [26:0] i_prev2_y,
-    output logic [26:0] o_out2_x,
-    output logic [26:0] o_out2_y,
+    input  logic [DATA_W-1:0] i_i2_x,
+    input  logic [DATA_W-1:0] i_i2_y,
+    input  logic [DATA_W-1:0] i_prev2_x,
+    input  logic [DATA_W-1:0] i_prev2_y,
+    output logic [DATA_W-1:0] o_out2_x,
+    output logic [DATA_W-1:0] o_out2_y,
 
     // ============================================================
     // lane 3
     // ============================================================
-    input  logic [15:0] i_i3_x,
-    input  logic [15:0] i_i3_y,
-    input  logic [26:0] i_prev3_x,
-    input  logic [26:0] i_prev3_y,
-    output logic [26:0] o_out3_x,
-    output logic [26:0] o_out3_y
+    input  logic [DATA_W-1:0] i_i3_x,
+    input  logic [DATA_W-1:0] i_i3_y,
+    input  logic [DATA_W-1:0] i_prev3_x,
+    input  logic [DATA_W-1:0] i_prev3_y,
+    output logic [DATA_W-1:0] o_out3_x,
+    output logic [DATA_W-1:0] o_out3_y
 );
 
-    two_body_core u_core0 (
+    two_body_core #(
+        .DATA_W(DATA_W)
+    ) u_core0 (
         .i_clk   (i_clk),
         .i_rst   (i_rst),
         .i_b1_x  (i_i0_x),
@@ -67,7 +71,9 @@ module fourcore_bcj_datapath (
         .o_a_b1_y(o_out0_y)
     );
 
-    two_body_core u_core1 (
+    two_body_core #(
+        .DATA_W(DATA_W)
+    ) u_core1 (
         .i_clk   (i_clk),
         .i_rst   (i_rst),
         .i_b1_x  (i_i1_x),
@@ -81,7 +87,9 @@ module fourcore_bcj_datapath (
         .o_a_b1_y(o_out1_y)
     );
 
-    two_body_core u_core2 (
+    two_body_core #(
+        .DATA_W(DATA_W)
+    ) u_core2 (
         .i_clk   (i_clk),
         .i_rst   (i_rst),
         .i_b1_x  (i_i2_x),
@@ -95,7 +103,9 @@ module fourcore_bcj_datapath (
         .o_a_b1_y(o_out2_y)
     );
 
-    two_body_core u_core3 (
+    two_body_core #(
+        .DATA_W(DATA_W)
+    ) u_core3 (
         .i_clk   (i_clk),
         .i_rst   (i_rst),
         .i_b1_x  (i_i3_x),

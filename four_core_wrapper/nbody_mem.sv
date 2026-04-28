@@ -1,5 +1,6 @@
 module nbody_mem #(
     parameter int MAX_BODIES = 256,
+    parameter int DATA_W = 27,
     localparam int PTR_W = $clog2(MAX_BODIES)
 ) (
     input  logic clk,
@@ -7,59 +8,59 @@ module nbody_mem #(
     // CPU writes one complete body when VY_IN is committed.
     input  logic             cpu_body_we,
     input  logic [PTR_W-1:0] cpu_body_waddr,
-    input  logic [15:0]      cpu_x,
-    input  logic [15:0]      cpu_y,
-    input  logic [15:0]      cpu_m,
-    input  logic [15:0]      cpu_vx,
-    input  logic [15:0]      cpu_vy,
+    input  logic [DATA_W-1:0] cpu_x,
+    input  logic [DATA_W-1:0] cpu_y,
+    input  logic [DATA_W-1:0] cpu_m,
+    input  logic [DATA_W-1:0] cpu_vx,
+    input  logic [DATA_W-1:0] cpu_vy,
 
     // CPU output read port.
     input  logic [PTR_W-1:0] out_raddr,
-    output logic [15:0]      out_x,
-    output logic [15:0]      out_y,
+    output logic [DATA_W-1:0] out_x,
+    output logic [DATA_W-1:0] out_y,
 
     // Tile load read port for the force core.
     input  logic [PTR_W-1:0] tile_raddr,
-    output logic [15:0]      tile_x,
-    output logic [15:0]      tile_y,
+    output logic [DATA_W-1:0] tile_x,
+    output logic [DATA_W-1:0] tile_y,
 
     // J-body read port for the force core.
     input  logic [PTR_W-1:0] j_raddr,
-    output logic [15:0]      j_x,
-    output logic [15:0]      j_y,
-    output logic [15:0]      j_m,
+    output logic [DATA_W-1:0] j_x,
+    output logic [DATA_W-1:0] j_y,
+    output logic [DATA_W-1:0] j_m,
 
     // Integrator read port.
     input  logic [PTR_W-1:0] integ_raddr,
-    output logic [15:0]      integ_x,
-    output logic [15:0]      integ_y,
-    output logic [15:0]      integ_vx,
-    output logic [15:0]      integ_vy,
-    output logic [26:0]      integ_ax,
-    output logic [26:0]      integ_ay,
+    output logic [DATA_W-1:0] integ_x,
+    output logic [DATA_W-1:0] integ_y,
+    output logic [DATA_W-1:0] integ_vx,
+    output logic [DATA_W-1:0] integ_vy,
+    output logic [DATA_W-1:0] integ_ax,
+    output logic [DATA_W-1:0] integ_ay,
 
     // Integrator writeback port.
     input  logic             body_update_we,
     input  logic [PTR_W-1:0] body_update_addr,
-    input  logic [15:0]      body_update_x,
-    input  logic [15:0]      body_update_y,
-    input  logic [15:0]      body_update_vx,
-    input  logic [15:0]      body_update_vy,
+    input  logic [DATA_W-1:0] body_update_x,
+    input  logic [DATA_W-1:0] body_update_y,
+    input  logic [DATA_W-1:0] body_update_vx,
+    input  logic [DATA_W-1:0] body_update_vy,
 
     // Acceleration writeback ports, one per lane.
     input  logic [3:0]       accel_we,
     input  logic [PTR_W-1:0] accel_waddr [4],
-    input  logic [26:0]      accel_ax    [4],
-    input  logic [26:0]      accel_ay    [4]
+    input  logic [DATA_W-1:0] accel_ax    [4],
+    input  logic [DATA_W-1:0] accel_ay    [4]
 );
 
-    logic [15:0] x_mem  [MAX_BODIES];
-    logic [15:0] y_mem  [MAX_BODIES];
-    logic [15:0] m_mem  [MAX_BODIES];
-    logic [15:0] vx_mem [MAX_BODIES];
-    logic [15:0] vy_mem [MAX_BODIES];
-    logic [26:0] ax_mem [MAX_BODIES];
-    logic [26:0] ay_mem [MAX_BODIES];
+    logic [DATA_W-1:0] x_mem  [MAX_BODIES];
+    logic [DATA_W-1:0] y_mem  [MAX_BODIES];
+    logic [DATA_W-1:0] m_mem  [MAX_BODIES];
+    logic [DATA_W-1:0] vx_mem [MAX_BODIES];
+    logic [DATA_W-1:0] vy_mem [MAX_BODIES];
+    logic [DATA_W-1:0] ax_mem [MAX_BODIES];
+    logic [DATA_W-1:0] ay_mem [MAX_BODIES];
 
     always_ff @(posedge clk) begin
         if (cpu_body_we) begin
@@ -68,8 +69,8 @@ module nbody_mem #(
             m_mem[cpu_body_waddr]  <= cpu_m;
             vx_mem[cpu_body_waddr] <= cpu_vx;
             vy_mem[cpu_body_waddr] <= cpu_vy;
-            ax_mem[cpu_body_waddr] <= 27'd0;
-            ay_mem[cpu_body_waddr] <= 27'd0;
+            ax_mem[cpu_body_waddr] <= '0;
+            ay_mem[cpu_body_waddr] <= '0;
         end
 
         if (body_update_we) begin

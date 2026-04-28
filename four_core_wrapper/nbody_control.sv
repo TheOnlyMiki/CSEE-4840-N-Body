@@ -1,5 +1,6 @@
 module nbody_control #(
-    parameter int MAX_BODIES = 256
+    parameter int MAX_BODIES = 256,
+    parameter int DATA_W = 27
 ) (
     input  logic clk,
     input  logic reset,
@@ -11,33 +12,33 @@ module nbody_control #(
     output logic        done,
 
     output logic [$clog2(MAX_BODIES)-1:0] tile_raddr,
-    input  logic [15:0]                   tile_x,
-    input  logic [15:0]                   tile_y,
+    input  logic [DATA_W-1:0]             tile_x,
+    input  logic [DATA_W-1:0]             tile_y,
 
     output logic [$clog2(MAX_BODIES)-1:0] j_raddr,
-    input  logic [15:0]                   j_x,
-    input  logic [15:0]                   j_y,
-    input  logic [15:0]                   j_m,
+    input  logic [DATA_W-1:0]             j_x,
+    input  logic [DATA_W-1:0]             j_y,
+    input  logic [DATA_W-1:0]             j_m,
 
     output logic [$clog2(MAX_BODIES)-1:0] integ_raddr,
-    input  logic [15:0]                   integ_x,
-    input  logic [15:0]                   integ_y,
-    input  logic [15:0]                   integ_vx,
-    input  logic [15:0]                   integ_vy,
-    input  logic [26:0]                   integ_ax,
-    input  logic [26:0]                   integ_ay,
+    input  logic [DATA_W-1:0]             integ_x,
+    input  logic [DATA_W-1:0]             integ_y,
+    input  logic [DATA_W-1:0]             integ_vx,
+    input  logic [DATA_W-1:0]             integ_vy,
+    input  logic [DATA_W-1:0]             integ_ax,
+    input  logic [DATA_W-1:0]             integ_ay,
 
     output logic                          body_update_we,
     output logic [$clog2(MAX_BODIES)-1:0] body_update_addr,
-    output logic [15:0]                   body_update_x,
-    output logic [15:0]                   body_update_y,
-    output logic [15:0]                   body_update_vx,
-    output logic [15:0]                   body_update_vy,
+    output logic [DATA_W-1:0]             body_update_x,
+    output logic [DATA_W-1:0]             body_update_y,
+    output logic [DATA_W-1:0]             body_update_vx,
+    output logic [DATA_W-1:0]             body_update_vy,
 
     output logic [3:0]                    accel_we,
     output logic [$clog2(MAX_BODIES)-1:0] accel_waddr [4],
-    output logic [26:0]                   accel_ax    [4],
-    output logic [26:0]                   accel_ay    [4]
+    output logic [DATA_W-1:0]             accel_ax    [4],
+    output logic [DATA_W-1:0]             accel_ay    [4]
 );
 
     typedef enum logic [3:0] {
@@ -73,24 +74,24 @@ module nbody_control #(
     logic        core_load_en;
     logic        core_compute_en;
     logic [3:0]  core_load_idx;
-    logic [15:0] core_load_x;
-    logic [15:0] core_load_y;
+    logic [DATA_W-1:0] core_load_x;
+    logic [DATA_W-1:0] core_load_y;
     logic [1:0]  core_grp_sel;
-    logic [15:0] core_j_x;
-    logic [15:0] core_j_y;
-    logic [15:0] core_j_m;
+    logic [DATA_W-1:0] core_j_x;
+    logic [DATA_W-1:0] core_j_y;
+    logic [DATA_W-1:0] core_j_m;
     logic [3:0]  core_lane_mask;
 
-    logic [26:0] core_res_x [4];
-    logic [26:0] core_res_y [4];
+    logic [DATA_W-1:0] core_res_x [4];
+    logic [DATA_W-1:0] core_res_y [4];
     logic        core_res_vld;
 
     logic        integrator_start;
     logic        integrator_done;
-    logic [15:0] integrator_x_out;
-    logic [15:0] integrator_y_out;
-    logic [15:0] integrator_vx_out;
-    logic [15:0] integrator_vy_out;
+    logic [DATA_W-1:0] integrator_x_out;
+    logic [DATA_W-1:0] integrator_y_out;
+    logic [DATA_W-1:0] integrator_vx_out;
+    logic [DATA_W-1:0] integrator_vy_out;
 
     function automatic logic [31:0] ptr_to_u32(input logic [PTR_W-1:0] value);
         ptr_to_u32 = {{(32-PTR_W){1'b0}}, value};
@@ -144,7 +145,9 @@ module nbody_control #(
     assign j_raddr     = j_body_idx;
     assign integ_raddr = integrate_idx;
 
-    four_core_wrapper u_core (
+    four_core_wrapper #(
+        .DATA_W(DATA_W)
+    ) u_core (
         .i_clk       (clk),
         .i_rst       (~reset),
         .i_clear_prev(core_clear_prev),
@@ -169,7 +172,9 @@ module nbody_control #(
         .o_res_vld   (core_res_vld)
     );
 
-    nbody_integrator u_integrator (
+    nbody_integrator #(
+        .DATA_W(DATA_W)
+    ) u_integrator (
         .clk    (clk),
         .reset  (reset),
         .i_start(integrator_start),
@@ -200,26 +205,26 @@ module nbody_control #(
             core_load_en     <= 1'b0;
             core_compute_en  <= 1'b0;
             core_load_idx    <= 4'd0;
-            core_load_x      <= 16'd0;
-            core_load_y      <= 16'd0;
+            core_load_x      <= '0;
+            core_load_y      <= '0;
             core_grp_sel     <= 2'd0;
-            core_j_x         <= 16'd0;
-            core_j_y         <= 16'd0;
-            core_j_m         <= 16'd0;
+            core_j_x         <= '0;
+            core_j_y         <= '0;
+            core_j_m         <= '0;
             core_lane_mask   <= 4'hF;
             integrator_start <= 1'b0;
             body_update_we   <= 1'b0;
             body_update_addr <= '0;
-            body_update_x    <= 16'd0;
-            body_update_y    <= 16'd0;
-            body_update_vx   <= 16'd0;
-            body_update_vy   <= 16'd0;
+            body_update_x    <= '0;
+            body_update_y    <= '0;
+            body_update_vx   <= '0;
+            body_update_vy   <= '0;
             accel_we         <= 4'd0;
 
             for (int lane = 0; lane < 4; lane++) begin
                 accel_waddr[lane] <= '0;
-                accel_ax[lane]    <= 27'd0;
-                accel_ay[lane]    <= 27'd0;
+                accel_ax[lane]    <= '0;
+                accel_ay[lane]    <= '0;
             end
         end else begin
             core_clear_prev  <= 1'b0;
@@ -251,8 +256,8 @@ module nbody_control #(
                         core_load_x <= tile_x;
                         core_load_y <= tile_y;
                     end else begin
-                        core_load_x <= 16'd0;
-                        core_load_y <= 16'd0;
+                        core_load_x <= '0;
+                        core_load_y <= '0;
                     end
 
                     if (core_load_idx == 4'd15) begin

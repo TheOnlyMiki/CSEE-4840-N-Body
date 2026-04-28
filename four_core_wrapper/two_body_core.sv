@@ -26,25 +26,27 @@
 // So: prev must be driven from outside for the c15 sampling edge.
 //==============================================================================
 
-module two_body_core (
+module two_body_core #(
+    parameter int DATA_W = 27
+) (
     input  logic        i_clk,
     input  logic        i_rst,   // active-low reset
 
-    // 16-bit S1E8M7 inputs
-    input  logic [15:0] i_b1_x,
-    input  logic [15:0] i_b1_y,
-    input  logic [15:0] i_b2_x,
-    input  logic [15:0] i_b2_y,
-    input  logic [15:0] i_m_b2,
+    // 27-bit S1E8M18 inputs
+    input  logic [DATA_W-1:0] i_b1_x,
+    input  logic [DATA_W-1:0] i_b1_y,
+    input  logic [DATA_W-1:0] i_b2_x,
+    input  logic [DATA_W-1:0] i_b2_y,
+    input  logic [DATA_W-1:0] i_m_b2,
 
     // 27-bit previous accel in core format (S1E8M18)
     // LATE INPUT: sample this only when term reaches final add point.
-    input  logic [26:0] i_a_b1_x,
-    input  logic [26:0] i_a_b1_y,
+    input  logic [DATA_W-1:0] i_a_b1_x,
+    input  logic [DATA_W-1:0] i_a_b1_y,
 
     // 27-bit output accel in core format (S1E8M18)
-    output logic [26:0] o_a_b1_x,
-    output logic [26:0] o_a_b1_y
+    output logic [DATA_W-1:0] o_a_b1_x,
+    output logic [DATA_W-1:0] o_a_b1_y
 );
 
     //--------------------------------------------------------------------------
@@ -53,8 +55,7 @@ module two_body_core (
     localparam logic [26:0] EPSILON_SQUARE = {1'b0, 8'd125, 18'd0};
 
     //--------------------------------------------------------------------------
-    // Pack 16-bit S1E8M7 -> 27-bit (S1E8M18 style): {s,e,m7,11'b0}
-    // Preserve zero exactly.
+    // Body inputs already use the 27-bit S1E8M18 core format.
     //--------------------------------------------------------------------------
     logic [26:0] b1_x_27;
     logic [26:0] b1_y_27;
@@ -62,14 +63,14 @@ module two_body_core (
     logic [26:0] b2_y_27;
     logic [26:0] m2_27;
 
-    assign b1_x_27 = (i_b1_x[14:0] == 15'd0) ? 27'd0 : {i_b1_x[15], i_b1_x[14:7], i_b1_x[6:0], 11'd0};
-    assign b1_y_27 = (i_b1_y[14:0] == 15'd0) ? 27'd0 : {i_b1_y[15], i_b1_y[14:7], i_b1_y[6:0], 11'd0};
-    assign b2_x_27 = (i_b2_x[14:0] == 15'd0) ? 27'd0 : {i_b2_x[15], i_b2_x[14:7], i_b2_x[6:0], 11'd0};
-    assign b2_y_27 = (i_b2_y[14:0] == 15'd0) ? 27'd0 : {i_b2_y[15], i_b2_y[14:7], i_b2_y[6:0], 11'd0};
-    assign m2_27   = (i_m_b2[14:0] == 15'd0) ? 27'd0 : {i_m_b2[15], i_m_b2[14:7], i_m_b2[6:0], 11'd0};
+    assign b1_x_27 = i_b1_x;
+    assign b1_y_27 = i_b1_y;
+    assign b2_x_27 = i_b2_x;
+    assign b2_y_27 = i_b2_y;
+    assign m2_27   = i_m_b2;
 
     //--------------------------------------------------------------------------
-    // c0: register packed inputs
+    // c0: register core-format inputs
     //--------------------------------------------------------------------------
     logic [26:0] r_b1_x_c0;
     logic [26:0] r_b1_y_c0;

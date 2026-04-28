@@ -17,6 +17,7 @@
 //   0x0A OUT_X     R  Output X position for the current output body.
 //   0x0B OUT_Y     R  Output Y position for the current output body. Reading this
 //                  register increments the output pointer.
+// Data payloads use the low 27 bits of each 32-bit Avalon word.
 
 module nbody_accel_avmm #(
     parameter int MAX_BODIES = 256
@@ -45,6 +46,8 @@ module nbody_accel_avmm #(
     localparam logic [7:0] REG_OUT_X    = 8'h0A;
     localparam logic [7:0] REG_OUT_Y    = 8'h0B;
 
+    localparam int DATA_W = 27;
+    localparam int PAD_W = 32 - DATA_W;
     localparam int PTR_W = $clog2(MAX_BODIES);
     localparam logic [PTR_W-1:0] MAX_BODY_PTR = PTR_W'(MAX_BODIES - 1);
 
@@ -58,49 +61,49 @@ module nbody_accel_avmm #(
     logic [PTR_W-1:0] input_ptr;
     logic [PTR_W-1:0] output_ptr;
 
-    logic [15:0] x_in_shadow;
-    logic [15:0] y_in_shadow;
-    logic [15:0] m_in_shadow;
-    logic [15:0] vx_in_shadow;
+    logic [DATA_W-1:0] x_in_shadow;
+    logic [DATA_W-1:0] y_in_shadow;
+    logic [DATA_W-1:0] m_in_shadow;
+    logic [DATA_W-1:0] vx_in_shadow;
+    logic [DATA_W-1:0] vy_in_shadow;
 
     logic             cpu_body_we;
     logic [PTR_W-1:0] cpu_body_waddr;
-    logic [15:0]      out_x;
-    logic [15:0]      out_y;
+    logic [DATA_W-1:0] out_x;
+    logic [DATA_W-1:0] out_y;
 
     logic [PTR_W-1:0] tile_raddr;
-    logic [15:0]      tile_x;
-    logic [15:0]      tile_y;
+    logic [DATA_W-1:0] tile_x;
+    logic [DATA_W-1:0] tile_y;
 
     logic [PTR_W-1:0] j_raddr;
-    logic [15:0]      j_x;
-    logic [15:0]      j_y;
-    logic [15:0]      j_m;
+    logic [DATA_W-1:0] j_x;
+    logic [DATA_W-1:0] j_y;
+    logic [DATA_W-1:0] j_m;
 
     logic [PTR_W-1:0] integ_raddr;
-    logic [15:0]      integ_x;
-    logic [15:0]      integ_y;
-    logic [15:0]      integ_vx;
-    logic [15:0]      integ_vy;
-    logic [26:0]      integ_ax;
-    logic [26:0]      integ_ay;
+    logic [DATA_W-1:0] integ_x;
+    logic [DATA_W-1:0] integ_y;
+    logic [DATA_W-1:0] integ_vx;
+    logic [DATA_W-1:0] integ_vy;
+    logic [DATA_W-1:0] integ_ax;
+    logic [DATA_W-1:0] integ_ay;
 
     logic             body_update_we;
     logic [PTR_W-1:0] body_update_addr;
-    logic [15:0]      body_update_x;
-    logic [15:0]      body_update_y;
-    logic [15:0]      body_update_vx;
-    logic [15:0]      body_update_vy;
+    logic [DATA_W-1:0] body_update_x;
+    logic [DATA_W-1:0] body_update_y;
+    logic [DATA_W-1:0] body_update_vx;
+    logic [DATA_W-1:0] body_update_vy;
 
     logic [3:0]       accel_we;
     logic [PTR_W-1:0] accel_waddr [4];
-    logic [26:0]      accel_ax    [4];
-    logic [26:0]      accel_ay    [4];
-
-    assign cpu_body_waddr = input_ptr;
+    logic [DATA_W-1:0] accel_ax    [4];
+    logic [DATA_W-1:0] accel_ay    [4];
 
     nbody_mem #(
-        .MAX_BODIES(MAX_BODIES)
+        .MAX_BODIES(MAX_BODIES),
+        .DATA_W(DATA_W)
     ) u_mem (
         .clk             (clk),
 
@@ -110,7 +113,7 @@ module nbody_accel_avmm #(
         .cpu_y           (y_in_shadow),
         .cpu_m           (m_in_shadow),
         .cpu_vx          (vx_in_shadow),
-        .cpu_vy          (writedata[15:0]),
+        .cpu_vy          (vy_in_shadow),
 
         .out_raddr       (output_ptr),
         .out_x           (out_x),
@@ -147,7 +150,8 @@ module nbody_accel_avmm #(
     );
 
     nbody_control #(
-        .MAX_BODIES(MAX_BODIES)
+        .MAX_BODIES(MAX_BODIES),
+        .DATA_W(DATA_W)
     ) u_control (
         .clk             (clk),
         .reset           (reset),
@@ -196,11 +200,13 @@ module nbody_accel_avmm #(
             gap_reg       <= 32'd0;
             input_ptr     <= '0;
             output_ptr    <= '0;
-            x_in_shadow   <= 16'd0;
-            y_in_shadow   <= 16'd0;
-            m_in_shadow   <= 16'd0;
-            vx_in_shadow  <= 16'd0;
-            cpu_body_we   <= 1'b0;
+            x_in_shadow   <= '0;
+            y_in_shadow   <= '0;
+            m_in_shadow   <= '0;
+            vx_in_shadow  <= '0;
+            vy_in_shadow  <= '0;
+            cpu_body_we    <= 1'b0;
+            cpu_body_waddr <= '0;
         end else begin
             go_pulse    <= 1'b0;
             cpu_body_we <= 1'b0;
@@ -218,13 +224,15 @@ module nbody_accel_avmm #(
 
                     REG_N_BODIES: n_bodies_reg <= writedata;
                     REG_GAP:      gap_reg      <= writedata;
-                    REG_X_IN:     x_in_shadow  <= writedata[15:0];
-                    REG_Y_IN:     y_in_shadow  <= writedata[15:0];
-                    REG_M_IN:     m_in_shadow  <= writedata[15:0];
-                    REG_VX_IN:    vx_in_shadow <= writedata[15:0];
+                    REG_X_IN:     x_in_shadow  <= writedata[DATA_W-1:0];
+                    REG_Y_IN:     y_in_shadow  <= writedata[DATA_W-1:0];
+                    REG_M_IN:     m_in_shadow  <= writedata[DATA_W-1:0];
+                    REG_VX_IN:    vx_in_shadow <= writedata[DATA_W-1:0];
 
                     REG_VY_IN: begin
-                        cpu_body_we <= 1'b1;
+                        vy_in_shadow  <= writedata[DATA_W-1:0];
+                        cpu_body_we    <= 1'b1;
+                        cpu_body_waddr <= input_ptr;
 
                         if (input_ptr != MAX_BODY_PTR) begin
                             input_ptr <= input_ptr + 1'b1;
@@ -254,8 +262,8 @@ module nbody_accel_avmm #(
     always_comb begin
         unique case (address)
             REG_DONE:  readdata = {31'd0, done};
-            REG_OUT_X: readdata = {16'd0, out_x};
-            REG_OUT_Y: readdata = {16'd0, out_y};
+            REG_OUT_X: readdata = {{PAD_W{1'b0}}, out_x};
+            REG_OUT_Y: readdata = {{PAD_W{1'b0}}, out_y};
             default:   readdata = 32'd0;
         endcase
     end

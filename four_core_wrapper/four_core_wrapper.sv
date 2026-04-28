@@ -1,4 +1,6 @@
-module four_core_wrapper (
+module four_core_wrapper #(
+    parameter int DATA_W = 27
+) (
     input  logic        i_clk,
     input  logic        i_rst,
 
@@ -17,8 +19,8 @@ module four_core_wrapper (
     // are cleared so stale results do not leak across tiles.
     // ============================================================
     input  logic [3:0]  i_load_idx,
-    input  logic [15:0] i_load_x,
-    input  logic [15:0] i_load_y,
+    input  logic [DATA_W-1:0] i_load_x,
+    input  logic [DATA_W-1:0] i_load_y,
 
     // ============================================================
     // single external group select
@@ -32,23 +34,23 @@ module four_core_wrapper (
     // ============================================================
     // shared j input for current compute issue
     // ============================================================
-    input  logic [15:0] i_j_x,
-    input  logic [15:0] i_j_y,
-    input  logic [15:0] i_j_m,
+    input  logic [DATA_W-1:0] i_j_x,
+    input  logic [DATA_W-1:0] i_j_y,
+    input  logic [DATA_W-1:0] i_j_m,
     input  logic [3:0]  i_lane_mask,
 
     // ============================================================
     // accumulated outputs
     // always come from internal out_mem, never directly from datapath
     // ============================================================
-    output logic [26:0] o_res0_x,
-    output logic [26:0] o_res0_y,
-    output logic [26:0] o_res1_x,
-    output logic [26:0] o_res1_y,
-    output logic [26:0] o_res2_x,
-    output logic [26:0] o_res2_y,
-    output logic [26:0] o_res3_x,
-    output logic [26:0] o_res3_y,
+    output logic [DATA_W-1:0] o_res0_x,
+    output logic [DATA_W-1:0] o_res0_y,
+    output logic [DATA_W-1:0] o_res1_x,
+    output logic [DATA_W-1:0] o_res1_y,
+    output logic [DATA_W-1:0] o_res2_x,
+    output logic [DATA_W-1:0] o_res2_y,
+    output logic [DATA_W-1:0] o_res3_x,
+    output logic [DATA_W-1:0] o_res3_y,
 
     // selected group's cache has been written at least once since last clear/load.
     // this is NOT a "final all-j done" flag; final completion is still scheduled externally.
@@ -60,23 +62,23 @@ module four_core_wrapper (
     // ============================================================
     // local i-body memory (16 entries)
     // ============================================================
-    logic [15:0] i_x_mem [16];
-    logic [15:0] i_y_mem [16];
+    logic [DATA_W-1:0] i_x_mem [16];
+    logic [DATA_W-1:0] i_y_mem [16];
 
     // ============================================================
     // internal cached accumulated outputs (real wrapper outputs)
     // ============================================================
-    logic [26:0] acc_x_bank [16];
-    logic [26:0] acc_y_bank [16];
+    logic [DATA_W-1:0] acc_x_bank [16];
+    logic [DATA_W-1:0] acc_y_bank [16];
     logic [3:0]  grp_written;
 
     // ============================================================
     // fixed feedback chain (no per-group selection here)
     // ============================================================
-    logic [26:0] prev0_x_d0, prev0_x_d1, prev0_y_d0, prev0_y_d1;
-    logic [26:0] prev1_x_d0, prev1_x_d1, prev1_y_d0, prev1_y_d1;
-    logic [26:0] prev2_x_d0, prev2_x_d1, prev2_y_d0, prev2_y_d1;
-    logic [26:0] prev3_x_d0, prev3_x_d1, prev3_y_d0, prev3_y_d1;
+    logic [DATA_W-1:0] prev0_x_d0, prev0_x_d1, prev0_y_d0, prev0_y_d1;
+    logic [DATA_W-1:0] prev1_x_d0, prev1_x_d1, prev1_y_d0, prev1_y_d1;
+    logic [DATA_W-1:0] prev2_x_d0, prev2_x_d1, prev2_y_d0, prev2_y_d1;
+    logic [DATA_W-1:0] prev3_x_d0, prev3_x_d1, prev3_y_d0, prev3_y_d1;
 
     // ============================================================
     // c0->c17 metadata pipe for writeback address alignment
@@ -94,14 +96,14 @@ module four_core_wrapper (
     assign grp_base = {i_grp_sel, 2'b00};
     assign wb_base  = {grp_pipe[PIPE_LAT-1], 2'b00};
 
-    logic [15:0] cur_i0_x;
-    logic [15:0] cur_i0_y;
-    logic [15:0] cur_i1_x;
-    logic [15:0] cur_i1_y;
-    logic [15:0] cur_i2_x;
-    logic [15:0] cur_i2_y;
-    logic [15:0] cur_i3_x;
-    logic [15:0] cur_i3_y;
+    logic [DATA_W-1:0] cur_i0_x;
+    logic [DATA_W-1:0] cur_i0_y;
+    logic [DATA_W-1:0] cur_i1_x;
+    logic [DATA_W-1:0] cur_i1_y;
+    logic [DATA_W-1:0] cur_i2_x;
+    logic [DATA_W-1:0] cur_i2_y;
+    logic [DATA_W-1:0] cur_i3_x;
+    logic [DATA_W-1:0] cur_i3_y;
 
     assign cur_i0_x = i_x_mem[grp_base + 4'd0];
     assign cur_i0_y = i_y_mem[grp_base + 4'd0];
@@ -113,53 +115,55 @@ module four_core_wrapper (
     assign cur_i3_y = i_y_mem[grp_base + 4'd3];
 
     // active-high mask: 1 => self/invalid/hold, so new term is nulled by mj=0
-    logic [15:0] j0_m_eff;
-    logic [15:0] j1_m_eff;
-    logic [15:0] j2_m_eff;
-    logic [15:0] j3_m_eff;
+    logic [DATA_W-1:0] j0_m_eff;
+    logic [DATA_W-1:0] j1_m_eff;
+    logic [DATA_W-1:0] j2_m_eff;
+    logic [DATA_W-1:0] j3_m_eff;
 
-    assign j0_m_eff = i_lane_mask[0] ? 16'd0 : i_j_m;
-    assign j1_m_eff = i_lane_mask[1] ? 16'd0 : i_j_m;
-    assign j2_m_eff = i_lane_mask[2] ? 16'd0 : i_j_m;
-    assign j3_m_eff = i_lane_mask[3] ? 16'd0 : i_j_m;
+    assign j0_m_eff = i_lane_mask[0] ? '0 : i_j_m;
+    assign j1_m_eff = i_lane_mask[1] ? '0 : i_j_m;
+    assign j2_m_eff = i_lane_mask[2] ? '0 : i_j_m;
+    assign j3_m_eff = i_lane_mask[3] ? '0 : i_j_m;
 
     // ============================================================
     // datapath instances
     // ============================================================
-    logic [26:0] dp_out0_x, dp_out0_y;
-    logic [26:0] dp_out1_x, dp_out1_y;
-    logic [26:0] dp_out2_x, dp_out2_y;
-    logic [26:0] dp_out3_x, dp_out3_y;
+    logic [DATA_W-1:0] dp_out0_x, dp_out0_y;
+    logic [DATA_W-1:0] dp_out1_x, dp_out1_y;
+    logic [DATA_W-1:0] dp_out2_x, dp_out2_y;
+    logic [DATA_W-1:0] dp_out3_x, dp_out3_y;
 
-    fourcore_bcj_datapath u_dp (
+    fourcore_bcj_datapath #(
+        .DATA_W(DATA_W)
+    ) u_dp (
         .i_clk    (i_clk),
         .i_rst    (i_rst),
-        .i_j_x    (i_compute_en ? i_j_x    : 16'd0),
-        .i_j_y    (i_compute_en ? i_j_y    : 16'd0),
-        .i_j0_m   (i_compute_en ? j0_m_eff : 16'd0),
-        .i_j1_m   (i_compute_en ? j1_m_eff : 16'd0),
-        .i_j2_m   (i_compute_en ? j2_m_eff : 16'd0),
-        .i_j3_m   (i_compute_en ? j3_m_eff : 16'd0),
-        .i_i0_x   (i_compute_en ? cur_i0_x : 16'd0),
-        .i_i0_y   (i_compute_en ? cur_i0_y : 16'd0),
+        .i_j_x    (i_compute_en ? i_j_x    : '0),
+        .i_j_y    (i_compute_en ? i_j_y    : '0),
+        .i_j0_m   (i_compute_en ? j0_m_eff : '0),
+        .i_j1_m   (i_compute_en ? j1_m_eff : '0),
+        .i_j2_m   (i_compute_en ? j2_m_eff : '0),
+        .i_j3_m   (i_compute_en ? j3_m_eff : '0),
+        .i_i0_x   (i_compute_en ? cur_i0_x : '0),
+        .i_i0_y   (i_compute_en ? cur_i0_y : '0),
         .i_prev0_x(prev0_x_d1),
         .i_prev0_y(prev0_y_d1),
         .o_out0_x (dp_out0_x),
         .o_out0_y (dp_out0_y),
-        .i_i1_x   (i_compute_en ? cur_i1_x : 16'd0),
-        .i_i1_y   (i_compute_en ? cur_i1_y : 16'd0),
+        .i_i1_x   (i_compute_en ? cur_i1_x : '0),
+        .i_i1_y   (i_compute_en ? cur_i1_y : '0),
         .i_prev1_x(prev1_x_d1),
         .i_prev1_y(prev1_y_d1),
         .o_out1_x (dp_out1_x),
         .o_out1_y (dp_out1_y),
-        .i_i2_x   (i_compute_en ? cur_i2_x : 16'd0),
-        .i_i2_y   (i_compute_en ? cur_i2_y : 16'd0),
+        .i_i2_x   (i_compute_en ? cur_i2_x : '0),
+        .i_i2_y   (i_compute_en ? cur_i2_y : '0),
         .i_prev2_x(prev2_x_d1),
         .i_prev2_y(prev2_y_d1),
         .o_out2_x (dp_out2_x),
         .o_out2_y (dp_out2_y),
-        .i_i3_x   (i_compute_en ? cur_i3_x : 16'd0),
-        .i_i3_y   (i_compute_en ? cur_i3_y : 16'd0),
+        .i_i3_x   (i_compute_en ? cur_i3_x : '0),
+        .i_i3_y   (i_compute_en ? cur_i3_y : '0),
         .i_prev3_x(prev3_x_d1),
         .i_prev3_y(prev3_y_d1),
         .o_out3_x (dp_out3_x),
@@ -168,16 +172,16 @@ module four_core_wrapper (
 
     task automatic clear_wrapper_state;
         foreach (acc_x_bank[i]) begin
-            acc_x_bank[i] <= 27'd0;
-            acc_y_bank[i] <= 27'd0;
+            acc_x_bank[i] <= '0;
+            acc_y_bank[i] <= '0;
         end
 
         grp_written <= 4'b0000;
 
-        prev0_x_d0 <= 27'd0; prev0_x_d1 <= 27'd0; prev0_y_d0 <= 27'd0; prev0_y_d1 <= 27'd0;
-        prev1_x_d0 <= 27'd0; prev1_x_d1 <= 27'd0; prev1_y_d0 <= 27'd0; prev1_y_d1 <= 27'd0;
-        prev2_x_d0 <= 27'd0; prev2_x_d1 <= 27'd0; prev2_y_d0 <= 27'd0; prev2_y_d1 <= 27'd0;
-        prev3_x_d0 <= 27'd0; prev3_x_d1 <= 27'd0; prev3_y_d0 <= 27'd0; prev3_y_d1 <= 27'd0;
+        prev0_x_d0 <= '0; prev0_x_d1 <= '0; prev0_y_d0 <= '0; prev0_y_d1 <= '0;
+        prev1_x_d0 <= '0; prev1_x_d1 <= '0; prev1_y_d0 <= '0; prev1_y_d1 <= '0;
+        prev2_x_d0 <= '0; prev2_x_d1 <= '0; prev2_y_d0 <= '0; prev2_y_d1 <= '0;
+        prev3_x_d0 <= '0; prev3_x_d1 <= '0; prev3_y_d0 <= '0; prev3_y_d1 <= '0;
 
         foreach (vld_pipe[i]) begin
             vld_pipe[i] <= 1'b0;
@@ -191,8 +195,8 @@ module four_core_wrapper (
     always_ff @(posedge i_clk or negedge i_rst) begin
         if (!i_rst) begin
             foreach (i_x_mem[i]) begin
-                i_x_mem[i] <= 16'd0;
-                i_y_mem[i] <= 16'd0;
+                i_x_mem[i] <= '0;
+                i_y_mem[i] <= '0;
             end
 
             clear_wrapper_state();
