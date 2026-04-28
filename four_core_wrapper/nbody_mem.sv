@@ -1,7 +1,7 @@
 module nbody_mem #(
     parameter int MAX_BODIES = 256,
     parameter int DATA_W = 27,
-    localparam int PTR_W = $clog2(MAX_BODIES)
+    parameter int PTR_W = $clog2(MAX_BODIES)
 ) (
     input  logic clk,
 
