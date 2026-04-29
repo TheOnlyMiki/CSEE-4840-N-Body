@@ -22,3 +22,11 @@
 	<version>Version 21.1.0 Build 842 10/21/2021 SJ Lite Edition</version>
 </internal_error>
 
+<internal_error>
+	<executable>quartus_map</executable>
+	<sub_system>MEM</sub_system>
+	<error>*** Fatal Error: Out of memory in module quartus_map (60427 megabytes used)</error>
+	<date>Wed Apr 29 12:56:26 2026</date>
+	<version>Version 21.1.0 Build 842 10/21/2021 SJ Lite Edition</version>
+</internal_error>
+
