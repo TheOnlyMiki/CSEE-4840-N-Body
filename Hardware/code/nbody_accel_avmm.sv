@@ -103,7 +103,8 @@ module nbody_accel_avmm #(
 
     nbody_mem #(
         .MAX_BODIES(MAX_BODIES),
-        .DATA_W(DATA_W)
+        .DATA_W(DATA_W),
+        .PTR_W(PTR_W)
     ) u_mem (
         .clk             (clk),
 
