@@ -69,25 +69,15 @@ module nbody_accel_avmm #(
 
     logic             cpu_body_we;
     logic [PTR_W-1:0] cpu_body_waddr;
-    logic [DATA_W-1:0] out_x;
-    logic [DATA_W-1:0] out_y;
-
-    logic [PTR_W-1:0] tile_raddr;
-    logic [DATA_W-1:0] tile_x;
-    logic [DATA_W-1:0] tile_y;
-
-    logic [PTR_W-1:0] j_raddr;
-    logic [DATA_W-1:0] j_x;
-    logic [DATA_W-1:0] j_y;
-    logic [DATA_W-1:0] j_m;
-
-    logic [PTR_W-1:0] integ_raddr;
-    logic [DATA_W-1:0] integ_x;
-    logic [DATA_W-1:0] integ_y;
-    logic [DATA_W-1:0] integ_vx;
-    logic [DATA_W-1:0] integ_vy;
-    logic [DATA_W-1:0] integ_ax;
-    logic [DATA_W-1:0] integ_ay;
+    logic [PTR_W-1:0] control_body_raddr;
+    logic [PTR_W-1:0] mem_body_raddr;
+    logic [DATA_W-1:0] body_x;
+    logic [DATA_W-1:0] body_y;
+    logic [DATA_W-1:0] body_m;
+    logic [DATA_W-1:0] body_vx;
+    logic [DATA_W-1:0] body_vy;
+    logic [DATA_W-1:0] body_ax;
+    logic [DATA_W-1:0] body_ay;
 
     logic             body_update_we;
     logic [PTR_W-1:0] body_update_addr;
@@ -96,10 +86,12 @@ module nbody_accel_avmm #(
     logic [DATA_W-1:0] body_update_vx;
     logic [DATA_W-1:0] body_update_vy;
 
-    logic [3:0]       accel_we;
-    logic [PTR_W-1:0] accel_waddr [4];
-    logic [DATA_W-1:0] accel_ax    [4];
-    logic [DATA_W-1:0] accel_ay    [4];
+    logic              accel_we;
+    logic [PTR_W-1:0]  accel_waddr;
+    logic [DATA_W-1:0] accel_ax;
+    logic [DATA_W-1:0] accel_ay;
+
+    assign mem_body_raddr = done ? output_ptr : control_body_raddr;
 
     nbody_mem #(
         .MAX_BODIES(MAX_BODIES),
@@ -116,26 +108,14 @@ module nbody_accel_avmm #(
         .cpu_vx          (vx_in_shadow),
         .cpu_vy          (vy_in_shadow),
 
-        .out_raddr       (output_ptr),
-        .out_x           (out_x),
-        .out_y           (out_y),
-
-        .tile_raddr      (tile_raddr),
-        .tile_x          (tile_x),
-        .tile_y          (tile_y),
-
-        .j_raddr         (j_raddr),
-        .j_x             (j_x),
-        .j_y             (j_y),
-        .j_m             (j_m),
-
-        .integ_raddr     (integ_raddr),
-        .integ_x         (integ_x),
-        .integ_y         (integ_y),
-        .integ_vx        (integ_vx),
-        .integ_vy        (integ_vy),
-        .integ_ax        (integ_ax),
-        .integ_ay        (integ_ay),
+        .body_raddr      (mem_body_raddr),
+        .body_x          (body_x),
+        .body_y          (body_y),
+        .body_m          (body_m),
+        .body_vx         (body_vx),
+        .body_vy         (body_vy),
+        .body_ax         (body_ax),
+        .body_ay         (body_ay),
 
         .body_update_we  (body_update_we),
         .body_update_addr(body_update_addr),
@@ -163,22 +143,14 @@ module nbody_accel_avmm #(
         .gap             (gap_reg),
         .done            (done),
 
-        .tile_raddr      (tile_raddr),
-        .tile_x          (tile_x),
-        .tile_y          (tile_y),
-
-        .j_raddr         (j_raddr),
-        .j_x             (j_x),
-        .j_y             (j_y),
-        .j_m             (j_m),
-
-        .integ_raddr     (integ_raddr),
-        .integ_x         (integ_x),
-        .integ_y         (integ_y),
-        .integ_vx        (integ_vx),
-        .integ_vy        (integ_vy),
-        .integ_ax        (integ_ax),
-        .integ_ay        (integ_ay),
+        .body_raddr      (control_body_raddr),
+        .body_x          (body_x),
+        .body_y          (body_y),
+        .body_m          (body_m),
+        .body_vx         (body_vx),
+        .body_vy         (body_vy),
+        .body_ax         (body_ax),
+        .body_ay         (body_ay),
 
         .body_update_we  (body_update_we),
         .body_update_addr(body_update_addr),
@@ -263,8 +235,8 @@ module nbody_accel_avmm #(
     always_comb begin
         unique case (address)
             REG_DONE:  readdata = {31'd0, done};
-            REG_OUT_X: readdata = {{PAD_W{1'b0}}, out_x};
-            REG_OUT_Y: readdata = {{PAD_W{1'b0}}, out_y};
+            REG_OUT_X: readdata = {{PAD_W{1'b0}}, body_x};
+            REG_OUT_Y: readdata = {{PAD_W{1'b0}}, body_y};
             default:   readdata = 32'd0;
         endcase
     end
