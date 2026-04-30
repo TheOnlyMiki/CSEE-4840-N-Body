@@ -7,6 +7,7 @@ module nbody_control #(
 
     input  logic        go,
     input  logic        read_enable,
+    input  logic        first_step,
     input  logic [31:0] n_bodies,
     input  logic [31:0] gap,
     output logic        done,
@@ -67,6 +68,7 @@ module nbody_control #(
     update_next_t update_next;
 
     logic [31:0] timestep_count;
+    logic run_initial_half_step;
     logic [PTR_W-1:0] tile_base;
     logic [PTR_W-1:0] j_body_idx;
     logic [PTR_W-1:0] integrate_idx;
@@ -92,6 +94,11 @@ module nbody_control #(
 
     logic        integrator_start;
     logic        integrator_done;
+    logic        integrator_half_step;
+    logic [7:0]  integrator_ax_half_exp;
+    logic [7:0]  integrator_ay_half_exp;
+    logic [DATA_W-1:0] integrator_ax_in;
+    logic [DATA_W-1:0] integrator_ay_in;
     logic [DATA_W-1:0] integrator_x_out;
     logic [DATA_W-1:0] integrator_y_out;
     logic [DATA_W-1:0] integrator_vx_out;
@@ -192,6 +199,13 @@ module nbody_control #(
         endcase
     end
 
+    // Leapfrog starts with one half-step velocity kick. Later kicks are full-step.
+    assign integrator_half_step    = run_initial_half_step && (timestep_count == 32'd0);
+    assign integrator_ax_half_exp  = (body_ax[25:18] > 8'd1) ? (body_ax[25:18] - 8'd1) : 8'd0;
+    assign integrator_ay_half_exp  = (body_ay[25:18] > 8'd1) ? (body_ay[25:18] - 8'd1) : 8'd0;
+    assign integrator_ax_in        = integrator_half_step ? {body_ax[26], integrator_ax_half_exp, body_ax[17:0]} : body_ax;
+    assign integrator_ay_in        = integrator_half_step ? {body_ay[26], integrator_ay_half_exp, body_ay[17:0]} : body_ay;
+
     four_core_wrapper #(
         .DATA_W(DATA_W)
     ) u_core (
@@ -222,56 +236,57 @@ module nbody_control #(
     nbody_integrator #(
         .DATA_W(DATA_W)
     ) u_integrator (
-        .clk    (clk),
-        .reset  (reset),
-        .i_start(integrator_start),
-        .o_done (integrator_done),
-        .i_x    (body_x),
-        .i_y    (body_y),
-        .i_vx   (body_vx),
-        .i_vy   (body_vy),
-        .i_ax   (body_ax),
-        .i_ay   (body_ay),
-        .o_x    (integrator_x_out),
-        .o_y    (integrator_y_out),
-        .o_vx   (integrator_vx_out),
-        .o_vy   (integrator_vy_out)
+        .clk        (clk),
+        .reset      (reset),
+        .i_start    (integrator_start),
+        .o_done     (integrator_done),
+        .i_x        (body_x),
+        .i_y        (body_y),
+        .i_vx       (body_vx),
+        .i_vy       (body_vy),
+        .i_ax       (integrator_ax_in),
+        .i_ay       (integrator_ay_in),
+        .o_x        (integrator_x_out),
+        .o_y        (integrator_y_out),
+        .o_vx       (integrator_vx_out),
+        .o_vy       (integrator_vy_out)
     );
 
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
-            state            <= ST_IDLE;
-            update_next      <= UPD_DONE;
-            done             <= 1'b0;
-            timestep_count   <= 32'd0;
-            tile_base        <= '0;
-            j_body_idx       <= '0;
-            integrate_idx    <= '0;
-            wait_count       <= '0;
-            compute_grp      <= 2'd0;
-            store_lane       <= 2'd0;
-            core_clear_prev  <= 1'b0;
-            core_load_en     <= 1'b0;
-            core_compute_en  <= 1'b0;
-            core_load_idx    <= 4'd0;
-            core_load_x      <= '0;
-            core_load_y      <= '0;
-            core_grp_sel     <= 2'd0;
-            core_j_x         <= '0;
-            core_j_y         <= '0;
-            core_j_m         <= '0;
-            core_lane_mask   <= 4'hF;
-            integrator_start <= 1'b0;
-            body_update_we   <= 1'b0;
-            body_update_addr <= '0;
-            body_update_x    <= '0;
-            body_update_y    <= '0;
-            body_update_vx   <= '0;
-            body_update_vy   <= '0;
-            accel_we         <= 1'b0;
-            accel_waddr      <= '0;
-            accel_ax         <= '0;
-            accel_ay         <= '0;
+            state                 <= ST_IDLE;
+            update_next           <= UPD_DONE;
+            done                  <= 1'b0;
+            timestep_count        <= 32'd0;
+            run_initial_half_step <= 1'b0;
+            tile_base             <= '0;
+            j_body_idx            <= '0;
+            integrate_idx         <= '0;
+            wait_count            <= '0;
+            compute_grp           <= 2'd0;
+            store_lane            <= 2'd0;
+            core_clear_prev       <= 1'b0;
+            core_load_en          <= 1'b0;
+            core_compute_en       <= 1'b0;
+            core_load_idx         <= 4'd0;
+            core_load_x           <= '0;
+            core_load_y           <= '0;
+            core_grp_sel          <= 2'd0;
+            core_j_x              <= '0;
+            core_j_y              <= '0;
+            core_j_m              <= '0;
+            core_lane_mask        <= 4'hF;
+            integrator_start      <= 1'b0;
+            body_update_we        <= 1'b0;
+            body_update_addr      <= '0;
+            body_update_x         <= '0;
+            body_update_y         <= '0;
+            body_update_vx        <= '0;
+            body_update_vy        <= '0;
+            accel_we              <= 1'b0;
+            accel_waddr           <= '0;
+            accel_ax              <= '0;
+            accel_ay              <= '0;
         end else begin
             core_clear_prev  <= 1'b0;
             core_load_en     <= 1'b0;
@@ -284,12 +299,13 @@ module nbody_control #(
                 ST_IDLE: begin
                     done <= 1'b0;
                     if (go) begin
-                        tile_base      <= '0;
-                        core_load_idx  <= 4'd0;
-                        compute_grp    <= 2'd0;
-                        j_body_idx     <= '0;
-                        integrate_idx  <= '0;
-                        timestep_count <= 32'd0;
+                        tile_base             <= '0;
+                        core_load_idx         <= 4'd0;
+                        compute_grp           <= 2'd0;
+                        j_body_idx            <= '0;
+                        integrate_idx         <= '0;
+                        timestep_count        <= 32'd0;
+                        run_initial_half_step <= first_step;
                         if (n_bodies == 32'd0) begin
                             state <= ST_DONE;
                         end else begin

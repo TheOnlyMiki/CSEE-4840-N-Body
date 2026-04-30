@@ -54,6 +54,7 @@ module nbody_accel_avmm #(
     logic        go_pulse;
     logic        read_reg;
     logic        done;
+    logic        first_step;
 
     logic [31:0] n_bodies_reg;
     logic [31:0] gap_reg;
@@ -137,11 +138,12 @@ module nbody_accel_avmm #(
         .clk             (clk),
         .reset           (reset),
 
-        .go              (go_pulse),
-        .read_enable     (read_reg),
-        .n_bodies        (n_bodies_reg),
-        .gap             (gap_reg),
-        .done            (done),
+        .go                         (go_pulse),
+        .read_enable                (read_reg),
+        .first_step                 (first_step),
+        .n_bodies                   (n_bodies_reg),
+        .gap                        (gap_reg),
+        .done                       (done),
 
         .body_raddr      (control_body_raddr),
         .body_x          (body_x),
@@ -169,6 +171,7 @@ module nbody_accel_avmm #(
         if (reset) begin
             go_pulse      <= 1'b0;
             read_reg      <= 1'b0;
+            first_step <= 1'b1;
             n_bodies_reg  <= 32'd0;
             gap_reg       <= 32'd0;
             input_ptr     <= '0;
@@ -190,6 +193,7 @@ module nbody_accel_avmm #(
                         if (writedata[0]) begin
                             go_pulse   <= 1'b1;
                             read_reg   <= 1'b1;
+                            first_step <= 1'b0;
                             input_ptr  <= '0;
                             output_ptr <= '0;
                         end
@@ -206,6 +210,7 @@ module nbody_accel_avmm #(
                         vy_in_shadow  <= writedata[DATA_W-1:0];
                         cpu_body_we    <= 1'b1;
                         cpu_body_waddr <= input_ptr;
+                        first_step <= 1'b1;
 
                         if (input_ptr != MAX_BODY_PTR) begin
                             input_ptr <= input_ptr + 1'b1;

@@ -1,10 +1,13 @@
-// Integration Unit
+// Integration unit
 //
 // One-body update:
 //   vx' = vx + ax
 //   vy' = vy + ay
 //   x'  = x  + vx'
 //   y'  = y  + vy'
+//
+// The control unit supplies ax/ay as either a half-step or full-step
+// acceleration increment for leapfrog integration.
 //
 // All numeric inputs and outputs use the 27-bit S1E8M18 core format.
 
