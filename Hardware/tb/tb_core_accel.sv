@@ -18,9 +18,9 @@ module tb_core_accel;
   localparam int N_BODIES  = 256;   // <-- set any N you want
   localparam int PIPE_LAT  = 18;  // as per your datapath
 
-  localparam string INPUT_FILE = "../../input/TB/frame_input/frame0_256binit200.txt";
-  localparam string OUT_FILE   = "../../input/TB/accel_output/eps025_accel_256binit200.txt";
-  localparam string OUT_FILE_27bits   = "../../input/TB/eps025new_temp_27bits_256binit200.txt";
+  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200.txt";
+  localparam string OUT_FILE   = "tb/output/eps025_accel_256binit200.txt";
+  // localparam string OUT_FILE_27bits   = "tb/output/eps025new_temp_27bits_256binit200.txt";
 
   // -----------------------------
   // DUT IO (NEW CORE INTERFACE)
@@ -31,22 +31,24 @@ module tb_core_accel;
   logic        i_clk;
   logic        i_rst;  // active-low reset in your RTL: if(!i_rst) reset, else run
 
-  logic [15:0] i_b1_x, i_b1_y;
-  logic [15:0] i_b2_x, i_b2_y;
-  logic [15:0] i_m_b2;
+  logic [26:0] i_b1_x, i_b1_y;
+  logic [26:0] i_b2_x, i_b2_y;
+  logic [26:0] i_m_b2;
 
   logic [26:0] i_a_b1_x, i_a_b1_y;       // 27-bit prev accel
   wire  [26:0] o_a_b1_x_27, o_a_b1_y_27; // 27-bit DUT accel out
 
   // Truncated "chip output" (16-bit) - TB performs truncation
-  wire [15:0] o_a_b1_x, o_a_b1_y;
+  wire [26:0] o_a_b1_x, o_a_b1_y;
 
   // Truncation: keep sign/exp, take top 7 mant bits (of 18)
   // Optional zero-detect (treat exact 0 as 0)
   wire outx_zero = (o_a_b1_x_27[25:0] == 26'd0);
   wire outy_zero = (o_a_b1_y_27[25:0] == 26'd0);
-  assign o_a_b1_x = outx_zero ? 16'd0 : {o_a_b1_x_27[26], o_a_b1_x_27[25:18], o_a_b1_x_27[17:11]};
-  assign o_a_b1_y = outy_zero ? 16'd0 : {o_a_b1_y_27[26], o_a_b1_y_27[25:18], o_a_b1_y_27[17:11]};
+  //assign o_a_b1_x = outx_zero ? 16'd0 : {o_a_b1_x_27[26], o_a_b1_x_27[25:18], o_a_b1_x_27[17:11]};
+  //assign o_a_b1_y = outy_zero ? 16'd0 : {o_a_b1_y_27[26], o_a_b1_y_27[25:18], o_a_b1_y_27[17:11]};
+  assign o_a_b1_x = o_a_b1_x_27;
+  assign o_a_b1_y = o_a_b1_y_27;
 
   // -----------------------------
   // DUT (eps fixed inside core; no i_eps2 port)
@@ -77,13 +79,13 @@ module tb_core_accel;
   // -----------------------------
   // Frame storage
   // -----------------------------
-  logic [15:0] px [0:N_BODIES-1];
-  logic [15:0] py [0:N_BODIES-1];
-  logic [15:0] m  [0:N_BODIES-1];
+  logic [26:0] px [0:N_BODIES-1];
+  logic [26:0] py [0:N_BODIES-1];
+  logic [26:0] m  [0:N_BODIES-1];
 
   // Output accel (chip view, 16-bit)
-  logic [15:0] ax [0:N_BODIES-1];
-  logic [15:0] ay [0:N_BODIES-1];
+  logic [26:0] ax [0:N_BODIES-1];
+  logic [26:0] ay [0:N_BODIES-1];
 
   // -----------------------------
   // Streaming control (TB-only)
@@ -103,11 +105,11 @@ module tb_core_accel;
   // -----------------------------
   task automatic drive_idle();
     begin
-      i_b1_x   <= 16'h0000;
-      i_b1_y   <= 16'h0000;
-      i_b2_x   <= 16'h0000;
-      i_b2_y   <= 16'h0000;
-      i_m_b2   <= 16'h0000;
+      i_b1_x   <= 27'h1FC0000;
+      i_b1_y   <= 27'h0000000;
+      i_b2_x   <= 27'h2000000;
+      i_b2_y   <= 27'h0000000;
+      i_m_b2   <= 27'h1FC0000;
 
       i_a_b1_x <= 27'd0;
       i_a_b1_y <= 27'd0;
@@ -136,6 +138,15 @@ module tb_core_accel;
     end
   endtask
 
+  function automatic logic [26:0] fp16_to_fp27(input logic [15:0] x);
+    begin
+      if (x[14:0] == 15'd0)
+        fp16_to_fp27 = 27'd0;
+      else
+        fp16_to_fp27 = {x[15], x[14:7], x[6:0], 11'd0};
+    end
+  endfunction
+
 
   // -----------------------------
   // Read input frame file
@@ -149,9 +160,9 @@ module tb_core_accel;
     int got;
     begin
       for (int t = 0; t < N_BODIES; t++) begin
-        px[t] = 16'h0000;
-        py[t] = 16'h0000;
-        m[t]  = 16'h0000;
+        px[t] = 27'h0000000;
+        py[t] = 27'h0000000;
+        m[t]  = 27'h0000000;
       end
 
       fd = $fopen(fname, "r");
@@ -168,9 +179,9 @@ module tb_core_accel;
                       idx, lpx, lpy, lvx, lvy, lm);
 
         if (got == 6 && idx >= 0 && idx < N_BODIES) begin
-          px[idx] = lpx;
-          py[idx] = lpy;
-          m[idx]  = lm;
+          px[idx] = fp16_to_fp27(lpx);
+          py[idx] = fp16_to_fp27(lpy);
+          m[idx]  = fp16_to_fp27(lm);
         end
       end
       $fclose(fd);
@@ -297,33 +308,35 @@ module tb_core_accel;
 
     // Final "chip output" is 16-bit => truncate here for file output
     for (b = 0; b < N_BODIES; b++) begin
-      ax[b] = (a_acc_x_27[b][25:0] == 26'd0) ? 16'd0
-             : {a_acc_x_27[b][26], a_acc_x_27[b][25:18], a_acc_x_27[b][17:11]};
-      ay[b] = (a_acc_y_27[b][25:0] == 26'd0) ? 16'd0
-             : {a_acc_y_27[b][26], a_acc_y_27[b][25:18], a_acc_y_27[b][17:11]};
+      // ax[b] = (a_acc_x_27[b][25:0] == 26'd0) ? 16'd0
+      //        : {a_acc_x_27[b][26], a_acc_x_27[b][25:18], a_acc_x_27[b][17:11]};
+      // ay[b] = (a_acc_y_27[b][25:0] == 26'd0) ? 16'd0
+      //        : {a_acc_y_27[b][26], a_acc_y_27[b][25:18], a_acc_y_27[b][17:11]};
+      ax[b] = a_acc_x_27[b];
+      ay[b] = a_acc_y_27[b];
     end
 
-    // write 16-bit output
+    // write 27-bit output
     fo = $fopen(OUT_FILE, "w");
     if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE=%s", OUT_FILE);
 
-    $fwrite(fo, "# i ax ay (S1E8M7 hex)\n");
+    $fwrite(fo, "# i ax ay (S1E8M18 hex)\n");
     for (b = 0; b < N_BODIES; b++) begin
-      $fwrite(fo, "%4d  %04h  %04h\n", b, ax[b], ay[b]);
+      $fwrite(fo, "%4d  %07h  %04h\n", b, ax[b], ay[b]);
     end
     $fclose(fo);
 
     // write 27-bit accumulated output
-    fo = $fopen(OUT_FILE_27bits, "w");
-    if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE_27bits=%s", OUT_FILE_27bits);
-    $fwrite(fo, "# i ax27 ay27 (S1E8M18 hex)\n");
-    for (b = 0; b < N_BODIES; b++) begin
-      $fwrite(fo, "%4d  %07h  %07h\n", b, a_acc_x_27[b], a_acc_y_27[b]);
-    end
-    $fclose(fo);
+    // fo = $fopen(OUT_FILE_27bits, "w");
+    // if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE_27bits=%s", OUT_FILE_27bits);
+    // $fwrite(fo, "# i ax27 ay27 (S1E8M18 hex)\n");
+    // for (b = 0; b < N_BODIES; b++) begin
+    //   $fwrite(fo, "%4d  %07h  %07h\n", b, a_acc_x_27[b], a_acc_y_27[b]);
+    // end
+    // $fclose(fo);
 
     $display("DONE. Wrote %s", OUT_FILE);
-    $display("DONE. Wrote %s", OUT_FILE_27bits);
+    //$display("DONE. Wrote %s", OUT_FILE_27bits);
     $finish;
   end
 

@@ -40,7 +40,7 @@ module tb_fpadd;
         pass_cnt = 0;
         fail_cnt = 0;
 
-        fd_in = $fopen("../../input/TB/fpadd_cases.txt", "r");
+        fd_in = $fopen("tb/frame_input/fpadd_cases.txt", "r");
         if (fd_in == 0) begin
             $display("ERROR: cannot open fpadd_cases.txt");
             $finish;

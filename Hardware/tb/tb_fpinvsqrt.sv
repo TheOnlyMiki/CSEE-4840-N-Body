@@ -45,7 +45,7 @@ module tb_fpinvsqrt;
         pass_cnt = 0;
         fail_cnt = 0;
 
-        fd_in = $fopen("../../input/TB/fpinvsqrt_cases.txt", "r");
+        fd_in = $fopen("tb/frame_input/fpinvsqrt_cases.txt", "r");
         if (fd_in == 0) begin
             $display("ERROR: cannot open fpinvsqrt_cases.txt");
             $finish;

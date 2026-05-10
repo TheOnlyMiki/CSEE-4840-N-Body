@@ -22,7 +22,7 @@ module tb_fpmul;
         iB = 0;
         exp_out = 0;
 
-        fd_in = $fopen("../../input/TB/fpmul_cases.txt", "r");
+        fd_in = $fopen("tb/frame_input/fpmul_cases.txt", "r");
         if (fd_in == 0) begin
             $display("ERROR: cannot open fpmul_cases.txt");
             $finish;

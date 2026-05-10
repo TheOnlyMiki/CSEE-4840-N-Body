@@ -33,3 +33,24 @@
 *.bak
 *.orig
 *~
+
+# VCS / Verdi
+csrc/
+simv
+simv.daidir/
+ucli.key
+verdi_config_file
+
+# Simulation output
+tb/output/
+
+# Parent-level accidental sim dir
+../simv.daidir/
+
+# FSDB / waveform
+*.fsdb
+*.vpd
+*.vcd
+
+# Compile logs
+*.log
