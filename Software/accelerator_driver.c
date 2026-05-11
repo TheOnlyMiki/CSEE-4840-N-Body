@@ -118,6 +118,9 @@ static int nbody_write_bodies(unsigned long arg)
     if (barg.count == 0 || barg.count > NBODY_MAX_BODIES || !barg.particles)
         return -EINVAL;
 
+    if (dev.num_bodies == 0 || barg.count != dev.num_bodies)
+        return -EINVAL;
+
     bytes = barg.count * sizeof(*particles);
     particles = memdup_user((const void __user *)barg.particles, bytes);
     if (IS_ERR(particles))
@@ -161,6 +164,8 @@ static int nbody_read_results(unsigned long arg)
     if (!results)
         return -ENOMEM;
 
+    iowrite32(1, dev.virtbase + REG_READ);
+
     /*
      * Read OUT_X first, then OUT_Y. Only the OUT_Y read increments the
      * hardware output pointer.
@@ -186,8 +191,7 @@ static long nbody_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
     case NBODY_WRITE_CONFIG:
         if (copy_from_user(&cfg, (void __user *)arg, sizeof(cfg)))
             return -EFAULT;
-        if (cfg.num_bodies == 0 || cfg.num_bodies > NBODY_MAX_BODIES ||
-            cfg.gap == 0)
+        if (cfg.num_bodies > NBODY_MAX_BODIES || cfg.gap == 0)
             return -EINVAL;
 
         dev.num_bodies = cfg.num_bodies;
