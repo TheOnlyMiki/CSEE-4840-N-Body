@@ -14,6 +14,7 @@
 #define NBODY_POS_MAX 200.0f
 #define NBODY_MASS_MIN 0.002f
 #define NBODY_MASS_MAX 0.01f
+#define NBODY_GAP_MAX 50
 
 extern int num_bodies;
 extern int current_gap;
