@@ -2,10 +2,10 @@
 
 //------------------------------------------------------------------------------
 // TB: multi-body streaming scheduler driving a 2-body core
-// - Reads frame0 file:  idx px py vx vy m   (all hex, S1E8M7 for px/py/vx/vy/m)
+// - Reads frame0 file:  idx px py vx vy m   (all hex, S1E8M18 for px/py/vx/vy/m)
 // - Streams all pairs (b1 accumulates contributions from every b2!=b1)
 // - Core interface (NEW):
-//     inputs: 16-bit S1E8M7 (pos/mass), prev accel: 27-bit S1E8M18
+//     inputs: 27-bit S1E8M18 (pos/mass), prev accel: 27-bit S1E8M18
 //     outputs: 27-bit S1E8M18
 // - TB truncates final 27-bit accum to 16-bit S1E8M7 for "chip output" file
 // - Core has fixed epsilon_square internally 
@@ -18,8 +18,8 @@ module tb_core_accel;
   localparam int N_BODIES  = 256;   // <-- set any N you want
   localparam int PIPE_LAT  = 18;  // as per your datapath
 
-  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200.txt";
-  localparam string OUT_FILE   = "tb/output/eps025_accel_256binit200.txt";
+  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200_27bits.txt";
+  localparam string OUT_FILE   = "tb/output/eps025_accel_256binit200_27bits.txt";
   // localparam string OUT_FILE_27bits   = "tb/output/eps025new_temp_27bits_256binit200.txt";
 
   // -----------------------------
@@ -138,16 +138,6 @@ module tb_core_accel;
     end
   endtask
 
-  function automatic logic [26:0] fp16_to_fp27(input logic [15:0] x);
-    begin
-      if (x[14:0] == 15'd0)
-        fp16_to_fp27 = 27'd0;
-      else
-        fp16_to_fp27 = {x[15], x[14:7], x[6:0], 11'd0};
-    end
-  endfunction
-
-
   // -----------------------------
   // Read input frame file
   // line format: idx px py vx vy m (hex)
@@ -156,7 +146,7 @@ module tb_core_accel;
     int fd;
     string line;
     int idx;
-    logic [15:0] lpx, lpy, lvx, lvy, lm;
+    logic [26:0] lpx, lpy, lvx, lvy, lm;
     int got;
     begin
       for (int t = 0; t < N_BODIES; t++) begin
@@ -179,9 +169,9 @@ module tb_core_accel;
                       idx, lpx, lpy, lvx, lvy, lm);
 
         if (got == 6 && idx >= 0 && idx < N_BODIES) begin
-          px[idx] = fp16_to_fp27(lpx);
-          py[idx] = fp16_to_fp27(lpy);
-          m[idx]  = fp16_to_fp27(lm);
+          px[idx] = lpx;
+          py[idx] = lpy;
+          m[idx]  = lm;
         end
       end
       $fclose(fd);
@@ -322,7 +312,7 @@ module tb_core_accel;
 
     $fwrite(fo, "# i ax ay (S1E8M18 hex)\n");
     for (b = 0; b < N_BODIES; b++) begin
-      $fwrite(fo, "%4d  %07h  %04h\n", b, ax[b], ay[b]);
+      $fwrite(fo, "%4d  %07h  %07h\n", b, ax[b], ay[b]);
     end
     $fclose(fo);
 
