@@ -36,9 +36,14 @@
 
 # VCS / Verdi
 csrc/
+/sim/
 simv
 simv.daidir/
+*.daidir/
 ucli.key
+ucli.key.*
+inter.vpd
+novas.*
 verdi_config_file
 
 # Simulation output

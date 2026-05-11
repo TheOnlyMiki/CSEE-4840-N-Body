@@ -621,10 +621,10 @@ K_HOST = G0 * DT
 
 HOST_DTYPE = np.float32
 
-# EPS^2 bit-exact constant in u27
-# FIX: match RTL exactly: localparam [26:0] epsilon_square = {1'd0, 8'd100, 18'd0};
+# EPS^2 bit-exact constant in u27.
+# Matches RTL: localparam logic [26:0] EPSILON_SQUARE = {1'b0, 8'd125, 18'd0};
+# This encodes 2^(125 - 127) = 0.25, so epsilon = 0.5.
 EPS_SQUARE_U27 = (0 << 26) | (125 << 18) | 0
-# EPS_SQUARE_U27 = (0 << 26) | (100 << 18) | 0
 
 # ============================================================
 # Shared float layout params
@@ -942,8 +942,8 @@ import os
 # ============================================================
 # USER CONFIG
 # ============================================================
-RTL_FILE = "new!!!!laterprevtest_eps025_temp_27bits_256binit200.txt"
-PY_FILE  = "eps025_v4real_chiplike_256binit200/accel_core27_output/accel27_0.txt"
+RTL_FILE = "../Hardware/tb/output/eps025_accel_256binit200_27bits.txt"
+PY_FILE  = "../Hardware/tb/output/golden_accel_256binit200_27bits.txt"
 # RTL_FILE = "eps025_temp_27bits_8binit10.txt"
 # PY_FILE  = "eps025_v4real_chiplike_8binit10/accel_core27_output/accel27_0.txt"
 

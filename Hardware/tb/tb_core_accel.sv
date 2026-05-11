@@ -17,6 +17,7 @@ module tb_core_accel;
   // -----------------------------
   localparam int N_BODIES  = 256;   // <-- set any N you want
   localparam int PIPE_LAT  = 18;  // as per your datapath
+  parameter  int PREV_LAT  = 16;  // launch c0 -> prev sampled by final add
 
   localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200_27bits.txt";
   localparam string OUT_FILE   = "tb/output/eps025_accel_256binit200_27bits.txt";
@@ -35,7 +36,7 @@ module tb_core_accel;
   logic [26:0] i_b2_x, i_b2_y;
   logic [26:0] i_m_b2;
 
-  logic [26:0] i_a_b1_x, i_a_b1_y;       // 27-bit prev accel
+  wire  [26:0] i_a_b1_x, i_a_b1_y;       // 27-bit prev accel, late-aligned
   wire  [26:0] o_a_b1_x_27, o_a_b1_y_27; // 27-bit DUT accel out
 
   // Truncated "chip output" (16-bit) - TB performs truncation
@@ -95,10 +96,34 @@ module tb_core_accel;
   logic out_valid;
   assign out_valid = vsh[PIPE_LAT-1];
 
+  // two_body_core is the late-prev version: the previous accumulator is sampled
+  // at the final add input stage, not at c0 launch.  Keep the launch-time prev
+  // value in a sideband pipe and present it just before that final add samples.
+  logic [26:0] launch_prev_x_27, launch_prev_y_27;
+  logic [26:0] prev_x_pipe [0:PREV_LAT-1];
+  logic [26:0] prev_y_pipe [0:PREV_LAT-1];
+
   always_ff @(posedge i_clk) begin
-    if (!i_rst) vsh <= '0;
-    else        vsh <= {vsh[PIPE_LAT-2:0], in_valid};
+    if (!i_rst) begin
+      vsh <= '0;
+      for (int p = 0; p < PREV_LAT; p++) begin
+        prev_x_pipe[p] <= 27'd0;
+        prev_y_pipe[p] <= 27'd0;
+      end
+    end else begin
+      vsh <= {vsh[PIPE_LAT-2:0], in_valid};
+
+      prev_x_pipe[0] <= in_valid ? launch_prev_x_27 : 27'd0;
+      prev_y_pipe[0] <= in_valid ? launch_prev_y_27 : 27'd0;
+      for (int p = 0; p < PREV_LAT-1; p++) begin
+        prev_x_pipe[p+1] <= prev_x_pipe[p];
+        prev_y_pipe[p+1] <= prev_y_pipe[p];
+      end
+    end
   end
+
+  assign i_a_b1_x = prev_x_pipe[PREV_LAT-1];
+  assign i_a_b1_y = prev_y_pipe[PREV_LAT-1];
 
   // -----------------------------
   // Helpers
@@ -111,8 +136,8 @@ module tb_core_accel;
       i_b2_y   <= 27'h0000000;
       i_m_b2   <= 27'h1FC0000;
 
-      i_a_b1_x <= 27'd0;
-      i_a_b1_y <= 27'd0;
+      launch_prev_x_27 <= 27'd0;
+      launch_prev_y_27 <= 27'd0;
 
       in_valid <= 1'b0;
     end
@@ -131,8 +156,8 @@ module tb_core_accel;
       i_b2_y   <= py[b2];
       i_m_b2   <= m[b2];
 
-      i_a_b1_x <= a_prev_x_27;
-      i_a_b1_y <= a_prev_y_27;
+      launch_prev_x_27 <= a_prev_x_27;
+      launch_prev_y_27 <= a_prev_y_27;
 
       in_valid <= 1'b1;
     end
