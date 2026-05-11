@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "nbody.h"
@@ -29,6 +30,15 @@ uint8_t endpoint_address;
 pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t frame_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t hw_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static unsigned long long monotonic_ms(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (unsigned long long)ts.tv_sec * 1000ull +
+           (unsigned long long)ts.tv_nsec / 1000000ull;
+}
 
 int allocate_history(void)
 {
@@ -59,15 +69,6 @@ static float random_range(float min, float max)
     return min + (max - min) * ((float)rand() / (float)RAND_MAX);
 }
 
-static int clamp_screen_coord(int coord, int max_coord)
-{
-    if (coord < 0)
-        return 0;
-    if (coord > max_coord)
-        return max_coord;
-    return coord;
-}
-
 int get_radius_idx(float mass)
 {
     float normalized = (mass - NBODY_MASS_MIN) / (NBODY_MASS_MAX - NBODY_MASS_MIN);
@@ -84,17 +85,75 @@ int get_radius_idx(float mass)
 int world_to_screen_x(float x)
 {
     float normalized = (x - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-    int screen_x = (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
 
-    return clamp_screen_coord(screen_x, BODY_DISPLAY_W - 1);
+    return (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
 }
 
 int world_to_screen_y(float y)
 {
     float normalized = (y - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-    int screen_y = (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
 
-    return clamp_screen_coord(screen_y, BODY_DISPLAY_H - 1);
+    return (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
+}
+
+static void set_gap_delta(int delta)
+{
+    nbody_config_t cfg;
+
+    pthread_mutex_lock(&state_mutex);
+    if (delta > 0 && current_gap < NBODY_GAP_MAX)
+        current_gap++;
+    else if (delta < 0 && current_gap > 1)
+        current_gap--;
+    cfg.num_bodies = (uint32_t)num_bodies;
+    cfg.gap = (uint32_t)current_gap;
+    pthread_mutex_unlock(&state_mutex);
+
+    if (nbody_fd >= 0) {
+        pthread_mutex_lock(&hw_mutex);
+        ioctl(nbody_fd, NBODY_WRITE_CONFIG, &cfg);
+        pthread_mutex_unlock(&hw_mutex);
+    }
+}
+
+static void show_frame_delta(int delta)
+{
+    pthread_mutex_lock(&state_mutex);
+    is_paused = 1;
+    if (delta < 0 && view_idx > 0)
+        view_idx--;
+    else if (delta > 0 && view_idx < h_count - 1)
+        view_idx++;
+    pthread_cond_broadcast(&frame_ready_cond);
+    pthread_mutex_unlock(&state_mutex);
+}
+
+static void handle_keycode(uint8_t keycode)
+{
+    if (keycode == 0x2c) {
+        pthread_mutex_lock(&state_mutex);
+        is_paused = !is_paused;
+        pthread_cond_broadcast(&frame_ready_cond);
+        pthread_mutex_unlock(&state_mutex);
+    } else if (keycode == 0x1a) {
+        set_gap_delta(1);
+    } else if (keycode == 0x16) {
+        set_gap_delta(-1);
+    } else if (keycode == 0x04) {
+        show_frame_delta(-1);
+    } else if (keycode == 0x07) {
+        show_frame_delta(1);
+    } else if (keycode == 0x15) {
+        pthread_mutex_lock(&state_mutex);
+        is_paused = 1;
+        pthread_mutex_unlock(&state_mutex);
+        reset_system();
+    } else if (keycode == 0x14) {
+        pthread_mutex_lock(&state_mutex);
+        running = 0;
+        pthread_cond_broadcast(&frame_ready_cond);
+        pthread_mutex_unlock(&state_mutex);
+    }
 }
 
 void reset_system(void)
@@ -245,8 +304,14 @@ void *nbody_thread(void *arg)
 
 void *keyboard_handler(void *arg)
 {
+    enum {
+        REPEAT_DELAY_MS = 350,
+        REPEAT_INTERVAL_MS = 35,
+    };
     struct usb_keyboard_packet packet;
     uint8_t last_packet[8] = { 0 };
+    uint8_t held_repeat_key = 0;
+    unsigned long long next_repeat_ms = 0;
 
     (void)arg;
 
@@ -254,70 +319,51 @@ void *keyboard_handler(void *arg)
         int transferred = 0;
         int rc;
         uint8_t keycode;
+        int same_packet;
+        unsigned long long now;
 
         rc = libusb_interrupt_transfer(keyboard, endpoint_address,
                                        (unsigned char *)&packet, sizeof(packet),
                                        &transferred, 50);
-        if (rc == LIBUSB_ERROR_TIMEOUT)
+        now = monotonic_ms();
+
+        if (rc == LIBUSB_ERROR_TIMEOUT) {
+            if (held_repeat_key && now >= next_repeat_ms) {
+                handle_keycode(held_repeat_key);
+                next_repeat_ms = now + REPEAT_INTERVAL_MS;
+            }
             continue;
+        }
         if (rc != 0 || transferred != sizeof(packet))
             continue;
 
-        if (memcmp(&packet, last_packet, sizeof(packet)) == 0)
-            continue;
-        memcpy(last_packet, &packet, sizeof(packet));
+        same_packet = (memcmp(&packet, last_packet, sizeof(packet)) == 0);
+        if (!same_packet)
+            memcpy(last_packet, &packet, sizeof(packet));
 
         keycode = packet.keycode[0];
-        if (keycode == 0)
+        if (keycode == 0) {
+            held_repeat_key = 0;
+            continue;
+        }
+
+        if (keycode == 0x04 || keycode == 0x07) {
+            if (!same_packet || held_repeat_key != keycode) {
+                handle_keycode(keycode);
+                held_repeat_key = keycode;
+                next_repeat_ms = now + REPEAT_DELAY_MS;
+            } else if (now >= next_repeat_ms) {
+                handle_keycode(keycode);
+                next_repeat_ms = now + REPEAT_INTERVAL_MS;
+            }
+            continue;
+        }
+
+        held_repeat_key = 0;
+        if (same_packet)
             continue;
 
-        if (keycode == 0x2c) {
-            pthread_mutex_lock(&state_mutex);
-            is_paused = !is_paused;
-            pthread_cond_broadcast(&frame_ready_cond);
-            pthread_mutex_unlock(&state_mutex);
-        } else if (keycode == 0x1a || keycode == 0x16) {
-            nbody_config_t cfg;
-
-            pthread_mutex_lock(&state_mutex);
-            if (keycode == 0x1a && current_gap < 255)
-                current_gap++;
-            else if (keycode == 0x16 && current_gap > 1)
-                current_gap--;
-            cfg.num_bodies = (uint32_t)num_bodies;
-            cfg.gap = (uint32_t)current_gap;
-            pthread_mutex_unlock(&state_mutex);
-
-            if (nbody_fd >= 0) {
-                pthread_mutex_lock(&hw_mutex);
-                ioctl(nbody_fd, NBODY_WRITE_CONFIG, &cfg);
-                pthread_mutex_unlock(&hw_mutex);
-            }
-        } else if (keycode == 0x04) {
-            pthread_mutex_lock(&state_mutex);
-            is_paused = 1;
-            if (view_idx > 0)
-                view_idx--;
-            pthread_cond_broadcast(&frame_ready_cond);
-            pthread_mutex_unlock(&state_mutex);
-        } else if (keycode == 0x07) {
-            pthread_mutex_lock(&state_mutex);
-            is_paused = 1;
-            if (view_idx < h_count - 1)
-                view_idx++;
-            pthread_cond_broadcast(&frame_ready_cond);
-            pthread_mutex_unlock(&state_mutex);
-        } else if (keycode == 0x15) {
-            pthread_mutex_lock(&state_mutex);
-            is_paused = 1;
-            pthread_mutex_unlock(&state_mutex);
-            reset_system();
-        } else if (keycode == 0x14) {
-            pthread_mutex_lock(&state_mutex);
-            running = 0;
-            pthread_cond_broadcast(&frame_ready_cond);
-            pthread_mutex_unlock(&state_mutex);
-        }
+        handle_keycode(keycode);
     }
 
     return NULL;

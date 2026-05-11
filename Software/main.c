@@ -27,13 +27,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "Num Bodies must be between 1 and %d\n", MAX_BODIES);
         return 1;
     }
-    if (current_gap < 1) {
-        fprintf(stderr, "Gap must be at least 1\n");
+    if (current_gap < 1 || current_gap > NBODY_GAP_MAX) {
+        fprintf(stderr, "Gap must be between 1 and %d\n", NBODY_GAP_MAX);
         return 1;
     }
 
     if (allocate_history() < 0) {
-        fprintf(stderr, "Could not allocate history ring (%d frames, about 32 MiB at 1024 bodies)\n",
+        fprintf(stderr, "Could not allocate history ring (%d frames)\n",
                 MAX_HISTORY);
         return 1;
     }

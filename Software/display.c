@@ -250,7 +250,7 @@ void *display_thread(void *arg)
         }
 
         snprintf(line1, sizeof(line1), "Bodies: %4d/%d | Gap: %2d/%d | Frame: %d/%d | Status: %s",
-                 local_num, MAX_BODIES, local_gap, 10, local_view + 1, local_count,
+                 local_num, MAX_BODIES, local_gap, NBODY_GAP_MAX, local_view + 1, local_count,
                  local_paused ? "PAUSED" : "RUNNING");
         display_puts(line1, UI_START_ROW, 0);
         display_puts("[SPACE] Play/Pause | [W/S] Gap | [A/D] Frame | [R] Reset | [Q] Quit",

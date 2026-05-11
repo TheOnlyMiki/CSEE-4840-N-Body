@@ -111,11 +111,6 @@ static int nbody_write_bodies(unsigned long arg)
     nbody_particle_t *particles;
     size_t bytes;
     uint32_t i;
-    uint32_t raw_x;
-    uint32_t raw_y;
-    uint32_t raw_m;
-    uint32_t raw_vx;
-    uint32_t raw_vy;
 
     if (copy_from_user(&barg, (void __user *)arg, sizeof(barg)))
         return -EFAULT;
@@ -138,21 +133,11 @@ static int nbody_write_bodies(unsigned long arg)
      * and advances input_ptr.
      */
     for (i = 0; i < barg.count; i++) {
-        raw_x = f32_to_f27_bits(&particles[i].x);
-        raw_y = f32_to_f27_bits(&particles[i].y);
-        raw_m = f32_to_f27_bits(&particles[i].mass);
-        raw_vx = f32_to_f27_bits(&particles[i].vx);
-        raw_vy = f32_to_f27_bits(&particles[i].vy);
-
-        if (i < 8)
-            pr_info("nbody write[%u]: x=%07x y=%07x m=%07x vx=%07x vy=%07x\n",
-                    i, raw_x, raw_y, raw_m, raw_vx, raw_vy);
-
-        iowrite32(raw_x, dev.virtbase + REG_X_IN);
-        iowrite32(raw_y, dev.virtbase + REG_Y_IN);
-        iowrite32(raw_m, dev.virtbase + REG_M_IN);
-        iowrite32(raw_vx, dev.virtbase + REG_VX_IN);
-        iowrite32(raw_vy, dev.virtbase + REG_VY_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].x), dev.virtbase + REG_X_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].y), dev.virtbase + REG_Y_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].mass), dev.virtbase + REG_M_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].vx), dev.virtbase + REG_VX_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].vy), dev.virtbase + REG_VY_IN);
     }
 
     kfree(particles);
@@ -186,14 +171,8 @@ static int nbody_read_results(unsigned long arg)
      * hardware output pointer.
      */
     for (i = 0; i < rarg.count; i++) {
-        uint32_t raw_x = ioread32(dev.virtbase + REG_OUT_X) & NBODY_DATA_MASK;
-        uint32_t raw_y = ioread32(dev.virtbase + REG_OUT_Y) & NBODY_DATA_MASK;
-
-        if (i < 8)
-            pr_info("nbody read[%u]: x=%07x y=%07x\n", i, raw_x, raw_y);
-
-        f27_bits_to_f32(raw_x, &results[i].x);
-        f27_bits_to_f32(raw_y, &results[i].y);
+        f27_bits_to_f32(ioread32(dev.virtbase + REG_OUT_X), &results[i].x);
+        f27_bits_to_f32(ioread32(dev.virtbase + REG_OUT_Y), &results[i].y);
     }
 
     if (copy_to_user((void __user *)rarg.results, results, bytes))
