@@ -56,3 +56,6 @@ dkms.conf
 
 # Simulator work libraries
 /work/
+
+# Local Lab 3 reference copy
+/lab3-hw/
