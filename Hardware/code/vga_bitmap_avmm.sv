@@ -6,13 +6,16 @@
  * Avalon-MM; hardware only scans the bitmap out to VGA.
  *
  * Register map, 32-bit word addresses:
- *   0..9599  framebuffer words, read/write
+ *   0..9599  framebuffer words, write-only from software
+ *   all reads return 0
  *
  * Bitmap packing:
  *   WIDTH = 640, HEIGHT = 480, WORDS_PER_ROW = 20, FB_WORDS = 9600
  *   word_index = y * 20 + x / 32
  *   bit_index  = x % 32
  *   frame[y * 20 + x / 32][x % 32] = pixel(x, y)
+ *
+ * Pixel value 0 displays black. Pixel value 1 displays white.
  *
  * This bit order matches the existing display driver draft in Software/,
  * which packs pixels with (1u << (x % 32)). It is LSB-first within each
@@ -52,8 +55,6 @@ module vga_bitmap_avmm (
     logic [9:0]  vcount;
 
     logic        av_addr_valid;
-    logic        av_read_valid_d;
-    logic [31:0] av_readdata;
     logic [13:0] av_ram_addr;
 
     logic        vga_blank_raw;
@@ -107,7 +108,6 @@ module vga_bitmap_avmm (
         .port_a_we       (chipselect && write && av_addr_valid),
         .port_a_addr     (av_ram_addr),
         .port_a_writedata(writedata),
-        .port_a_readdata (av_readdata),
 
         .port_b_addr     (scan_addr),
         .port_b_readdata (scan_readdata)
@@ -115,18 +115,16 @@ module vga_bitmap_avmm (
 
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
-            av_read_valid_d <= 1'b0;
             active_video_d  <= 1'b0;
             bit_index_d     <= 5'd0;
         end else begin
-            av_read_valid_d <= chipselect && read && av_addr_valid;
             active_video_d  <= active_video;
             bit_index_d     <= bit_index;
         end
     end
 
-    assign readdata    = av_read_valid_d ? av_readdata : 32'd0;
-    assign VGA_BLANK_n = active_video_d;
+    assign readdata    = 32'd0;
+    assign VGA_BLANK_n = vga_blank_raw;
     assign pixel_bit   = scan_readdata[bit_index_d];
 
     always_comb begin

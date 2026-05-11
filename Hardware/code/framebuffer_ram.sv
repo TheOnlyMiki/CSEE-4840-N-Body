@@ -1,6 +1,6 @@
 // Simple dual-port 1-bit-per-pixel framebuffer storage.
 //
-// Port A is used by the Avalon-MM slave for CPU writes/readback.
+// Port A is used by the Avalon-MM slave for CPU writes.
 // Port B is used by the VGA scanout logic for continuous reads.
 
 module framebuffer_ram #(
@@ -12,7 +12,6 @@ module framebuffer_ram #(
     input  logic              port_a_we,
     input  logic [ADDR_W-1:0] port_a_addr,
     input  logic [31:0]       port_a_writedata,
-    output logic [31:0]       port_a_readdata,
 
     input  logic [ADDR_W-1:0] port_b_addr,
     output logic [31:0]       port_b_readdata
@@ -25,7 +24,6 @@ module framebuffer_ram #(
             mem[port_a_addr] <= port_a_writedata;
         end
 
-        port_a_readdata <= mem[port_a_addr];
         port_b_readdata <= mem[port_b_addr];
     end
 

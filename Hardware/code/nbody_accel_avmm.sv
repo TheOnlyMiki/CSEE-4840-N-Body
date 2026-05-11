@@ -1,8 +1,8 @@
 // Avalon-MM top-level shell for the N-body accelerator.
 //
 // Register map, 32-bit words:
-//   0x00 GO        W  Pulse high to start computation. Also resets input/output
-//                  body pointers to 0.
+//   0x00 GO        W  Write bit 0 high to start one accelerator run. This also
+//                  resets input/output body pointers to 0.
 //   0x01 N_BODIES  W  Number of active bodies in the simulation.
 //   0x02 GAP       W  Number of timesteps executed internally between DONE pulses.
 //   0x03 X_IN      W  Input X position for the current body.
@@ -12,12 +12,20 @@
 //   0x07 VY_IN     W  Input Y velocity for the current body. Writing this register
 //                  commits the current body and increments the input pointer.
 //   0x08 DONE      R  High when GAP timesteps have completed.
-//   0x09 READ      W  Write 1 after DONE is observed. Write 0 after reading all
-//                  outputs; this clears DONE and arms the next GO.
+//   0x09 READ      W  Write 1 while software is reading DONE/output data. Write
+//                  0 after reading all outputs; this clears DONE and arms the
+//                  next GO.
 //   0x0A OUT_X     R  Output X position for the current output body.
 //   0x0B OUT_Y     R  Output Y position for the current output body. Reading this
 //                  register increments the output pointer.
 // Data payloads use the low 27 bits of each 32-bit Avalon word.
+//
+// Output read sequence after DONE:
+//   read OUT_X, read OUT_Y, read OUT_X, read OUT_Y, ...
+//
+// Loading any body through VY_IN marks the next GO as the initial leapfrog
+// half-step run. Later GO writes run with normal full-step integration unless
+// software loads body data again.
 
 module nbody_accel_avmm #(
     parameter int MAX_BODIES = 256
@@ -54,7 +62,8 @@ module nbody_accel_avmm #(
     logic        go_pulse;
     logic        read_reg;
     logic        done;
-    logic        first_step;
+    logic        first_step_pending;
+    logic        first_step_for_run;
 
     logic [31:0] n_bodies_reg;
     logic [31:0] gap_reg;
@@ -140,7 +149,7 @@ module nbody_accel_avmm #(
 
         .go                         (go_pulse),
         .read_enable                (read_reg),
-        .first_step                 (first_step),
+        .first_step                 (first_step_for_run),
         .n_bodies                   (n_bodies_reg),
         .gap                        (gap_reg),
         .done                       (done),
@@ -171,7 +180,8 @@ module nbody_accel_avmm #(
         if (reset) begin
             go_pulse      <= 1'b0;
             read_reg      <= 1'b0;
-            first_step <= 1'b1;
+            first_step_pending <= 1'b1;
+            first_step_for_run <= 1'b1;
             n_bodies_reg  <= 32'd0;
             gap_reg       <= 32'd0;
             input_ptr     <= '0;
@@ -193,7 +203,8 @@ module nbody_accel_avmm #(
                         if (writedata[0]) begin
                             go_pulse   <= 1'b1;
                             read_reg   <= 1'b1;
-                            first_step <= 1'b0;
+                            first_step_for_run <= first_step_pending;
+                            first_step_pending <= 1'b0;
                             input_ptr  <= '0;
                             output_ptr <= '0;
                         end
@@ -210,7 +221,7 @@ module nbody_accel_avmm #(
                         vy_in_shadow  <= writedata[DATA_W-1:0];
                         cpu_body_we    <= 1'b1;
                         cpu_body_waddr <= input_ptr;
-                        first_step <= 1'b1;
+                        first_step_pending <= 1'b1;
 
                         if (input_ptr != MAX_BODY_PTR) begin
                             input_ptr <= input_ptr + 1'b1;
