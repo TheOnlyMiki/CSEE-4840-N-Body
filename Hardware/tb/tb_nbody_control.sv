@@ -54,7 +54,14 @@ module tb_nbody_control;
   logic [DATA_W-1:0] init_m  [0:MAX_BODIES-1];
   logic [DATA_W-1:0] init_vx [0:MAX_BODIES-1];
   logic [DATA_W-1:0] init_vy [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_x  [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_y  [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_vx [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_vy [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_ax [0:MAX_BODIES-1];
+  logic [DATA_W-1:0] final_ay [0:MAX_BODIES-1];
   logic              accel_seen [0:MAX_BODIES-1];
+  logic              update_seen [0:MAX_BODIES-1];
 
   int err_count;
   int accel_count;
@@ -133,7 +140,7 @@ module tb_nbody_control;
     begin
       go = 1'b0;
       read_enable = 1'b1;
-      first_step = 1'b0;
+      first_step = 1'b1;
       n_bodies = MAX_BODIES;
       gap = 32'd1;
       cpu_body_we = 1'b0;
@@ -159,7 +166,14 @@ module tb_nbody_control;
         init_m[i] = '0;
         init_vx[i] = '0;
         init_vy[i] = '0;
+        final_x[i] = '0;
+        final_y[i] = '0;
+        final_vx[i] = '0;
+        final_vy[i] = '0;
+        final_ax[i] = '0;
+        final_ay[i] = '0;
         accel_seen[i] = 1'b0;
+        update_seen[i] = 1'b0;
       end
 
       fd = $fopen(fname, "r");
@@ -236,10 +250,6 @@ module tb_nbody_control;
       accel_count = 0;
       update_count = 0;
 
-      fo = $fopen(OUT_FILE, "w");
-      if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE=%s", OUT_FILE);
-      $fwrite(fo, "# i ax ay (S1E8M18 hex)\n");
-
       pulse_go();
 
       while (done !== 1'b1 && cycles < RUN_TIMEOUT_CYCLES) begin
@@ -257,17 +267,30 @@ module tb_nbody_control;
               err_count++;
             end
             accel_seen[accel_waddr] = 1'b1;
+            final_ax[accel_waddr] = accel_ax;
+            final_ay[accel_waddr] = accel_ay;
             accel_count++;
-            $fwrite(fo, "%4d  %07h  %07h\n", accel_waddr, accel_ax, accel_ay);
           end
         end
 
         if (body_update_we) begin
-          update_count++;
+          if (body_update_addr >= MAX_BODIES) begin
+            $display("ERROR body_update_addr out of range: %0d", body_update_addr);
+            err_count++;
+          end else begin
+            if (update_seen[body_update_addr]) begin
+              $display("ERROR duplicate body update addr=%0d", body_update_addr);
+              err_count++;
+            end
+            update_seen[body_update_addr] = 1'b1;
+            final_x[body_update_addr] = body_update_x;
+            final_y[body_update_addr] = body_update_y;
+            final_vx[body_update_addr] = body_update_vx;
+            final_vy[body_update_addr] = body_update_vy;
+            update_count++;
+          end
         end
       end
-
-      $fclose(fo);
 
       if (done !== 1'b1) begin
         $display("ERROR timed out waiting for done after %0d cycles", cycles);
@@ -291,7 +314,26 @@ module tb_nbody_control;
           end
           err_count++;
         end
+
+        if (!update_seen[i]) begin
+          if (err_count < 32) begin
+            $display("ERROR missing body update addr=%0d", i);
+          end
+          err_count++;
+        end
       end
+
+      fo = $fopen(OUT_FILE, "w");
+      if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE=%s", OUT_FILE);
+      $fwrite(fo, "# i x y vx vy ax ay (S1E8M18 hex)\n");
+
+      for (int i = 0; i < MAX_BODIES; i++) begin
+        $fwrite(fo, "%4d  %07h  %07h  %07h  %07h  %07h  %07h\n",
+                i, final_x[i], final_y[i], final_vx[i], final_vy[i],
+                final_ax[i], final_ay[i]);
+      end
+
+      $fclose(fo);
 
       $display("DONE. cycles=%0d accel_count=%0d update_count=%0d wrote %s",
                cycles, accel_count, update_count, OUT_FILE);
@@ -305,10 +347,12 @@ module tb_nbody_control;
     read_frame_file(INPUT_FILE);
 
     repeat (4) @(posedge clk);
-    preload_memory();
-
     @(negedge clk);
     reset = 1'b0;
+
+    repeat (2) @(posedge clk);
+    preload_memory();
+    repeat (2) @(posedge clk);
 
     run_and_capture();
 

@@ -3,8 +3,8 @@
 Golden model for nbody_control + four_core_wrapper + nbody_integrator.
 
 Default output matches Hardware/tb/tb_nbody_control.sv:
-    # i ax ay (S1E8M18 hex)
-       0  0123456  0ABCDEF
+    # i x y vx vy ax ay (S1E8M18 hex)
+       0  0123456  0ABCDEF  0000000  0000000  0123000  0ABC000
 
 The model reuses the bit-exact FP/core helpers from golden.py, then applies the
 same control-level ordering: 16-body tiles, four 4-lane groups per tile, and
@@ -38,8 +38,8 @@ EPS_SQUARE_U27 = (0 << 26) | (125 << 18) | 0
 DEFAULT_INPUT = os.path.join(
     REPO_ROOT, "Hardware", "tb", "frame_input", "frame0_1024binit200_27bits.txt"
 )
-DEFAULT_ACCEL_OUT = os.path.join(
-    REPO_ROOT, "Hardware", "tb", "output", "golden_control_accel_1024binit200_27bits.txt"
+DEFAULT_STATE_OUT = os.path.join(
+    REPO_ROOT, "Hardware", "tb", "output", "golden_control_state_1024binit200_27bits.txt"
 )
 
 
@@ -255,13 +255,34 @@ def write_frame_file(path: str, state: BodyState, active_count: int) -> None:
             )
 
 
+def write_state_file(path: str, state: BodyState, active_count: int) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("# i x y vx vy ax ay (S1E8M18 hex)\n")
+        for i in range(active_count):
+            f.write(
+                f"{i:4d}  {u27_hex(state.x[i])}  {u27_hex(state.y[i])}  "
+                f"{u27_hex(state.vx[i])}  {u27_hex(state.vy[i])}  "
+                f"{u27_hex(state.ax[i])}  {u27_hex(state.ay[i])}\n"
+            )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a golden output for nbody_control.sv."
     )
     parser.add_argument("--input", default=DEFAULT_INPUT, help="Input frame file.")
-    parser.add_argument("--output", default=DEFAULT_ACCEL_OUT, help="Output accel file.")
+    parser.add_argument(
+        "--output",
+        default=DEFAULT_STATE_OUT,
+        help="Output final x/y/vx/vy/ax/ay file matching tb_nbody_control.sv.",
+    )
     parser.add_argument("--frame-output", default=None, help="Optional final updated frame output.")
+    parser.add_argument(
+        "--accel-output",
+        default=None,
+        help="Optional acceleration-only write stream file.",
+    )
     parser.add_argument("--max-bodies", type=int, default=1024, help="Memory capacity.")
     parser.add_argument("--n-bodies", type=int, default=None, help="Active body count.")
     parser.add_argument("--gap", type=int, default=1, help="Number of timesteps to run.")
@@ -285,18 +306,23 @@ def main() -> None:
         gap=args.gap,
         first_step=args.first_step,
     )
-    write_accel_file(args.output, writes)
+    write_state_file(args.output, final_state, active_count)
 
     if args.frame_output:
         write_frame_file(args.frame_output, final_state, active_count)
+
+    if args.accel_output:
+        write_accel_file(args.accel_output, writes)
 
     print(f"[OK] input        : {args.input}")
     print(f"[OK] n_bodies     : {active_count}")
     print(f"[OK] gap          : {args.gap}")
     print(f"[OK] first_step   : {int(args.first_step)}")
-    print(f"[OK] accel output : {args.output}")
+    print(f"[OK] state output : {args.output}")
     if args.frame_output:
         print(f"[OK] frame output : {args.frame_output}")
+    if args.accel_output:
+        print(f"[OK] accel output : {args.accel_output}")
 
 
 if __name__ == "__main__":
