@@ -54,36 +54,47 @@ void free_history(void)
     }
 }
 
-int get_radius_idx(uint32_t mass)
+static float random_range(float min, float max)
 {
-    mass &= NBODY_DATA_MASK;
-    if (mass < 16)
+    return min + (max - min) * ((float)rand() / (float)RAND_MAX);
+}
+
+static int clamp_screen_coord(int coord, int max_coord)
+{
+    if (coord < 0)
         return 0;
-    if (mass < 32)
+    if (coord > max_coord)
+        return max_coord;
+    return coord;
+}
+
+int get_radius_idx(float mass)
+{
+    float normalized = (mass - NBODY_MASS_MIN) / (NBODY_MASS_MAX - NBODY_MASS_MIN);
+
+    if (normalized < 0.25f)
+        return 0;
+    if (normalized < 0.50f)
         return 1;
-    if (mass < 48)
+    if (normalized < 0.75f)
         return 2;
     return 3;
 }
 
-int raw27_to_screen_x(uint32_t raw)
+int world_to_screen_x(float x)
 {
-    return (int)((raw & NBODY_DATA_MASK) % BODY_DISPLAY_W);
+    float normalized = (x - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
+    int screen_x = (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
+
+    return clamp_screen_coord(screen_x, BODY_DISPLAY_W - 1);
 }
 
-int raw27_to_screen_y(uint32_t raw)
+int world_to_screen_y(float y)
 {
-    return (int)((raw & NBODY_DATA_MASK) % BODY_DISPLAY_H);
-}
+    float normalized = (y - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
+    int screen_y = (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
 
-static uint32_t raw_velocity(void)
-{
-    int mag = (rand() % 5) + 1;
-
-    if (rand() & 1)
-        return (uint32_t)mag & NBODY_DATA_MASK;
-
-    return ((uint32_t)(-mag)) & NBODY_DATA_MASK;
+    return clamp_screen_coord(screen_y, BODY_DISPLAY_H - 1);
 }
 
 void reset_system(void)
@@ -106,13 +117,13 @@ void reset_system(void)
 
     pthread_mutex_lock(&state_mutex);
     for (i = 0; i < local_num; i++) {
-        uint32_t mass = (uint32_t)((rand() % 64) + 1);
+        float mass = random_range(NBODY_MASS_MIN, NBODY_MASS_MAX);
 
-        init_particles[i].x = (uint32_t)(rand() % BODY_DISPLAY_W) & NBODY_DATA_MASK;
-        init_particles[i].y = (uint32_t)(rand() % BODY_DISPLAY_H) & NBODY_DATA_MASK;
-        init_particles[i].mass = mass & NBODY_DATA_MASK;
-        init_particles[i].vx = raw_velocity();
-        init_particles[i].vy = raw_velocity();
+        init_particles[i].x = random_range(NBODY_POS_MIN, NBODY_POS_MAX);
+        init_particles[i].y = random_range(NBODY_POS_MIN, NBODY_POS_MAX);
+        init_particles[i].mass = mass;
+        init_particles[i].vx = 0.0f;
+        init_particles[i].vy = 0.0f;
 
         static_masses[i] = (uint32_t)get_radius_idx(mass);
         history[0][i].x = init_particles[i].x;

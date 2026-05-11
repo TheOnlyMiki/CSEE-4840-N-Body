@@ -17,6 +17,7 @@
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 #include <linux/uaccess.h>
 #include "nbody_ioctl.h"
 
@@ -44,6 +45,66 @@ struct nbody_dev {
 
 static struct nbody_dev dev;
 
+static uint32_t f32_to_f27_bits(const float *value)
+{
+    uint32_t bits;
+    uint32_t sign;
+    uint32_t exp;
+    uint32_t mant;
+    uint32_t rounded_mant;
+
+    memcpy(&bits, value, sizeof(bits));
+
+    sign = (bits >> 31) & 1u;
+    exp = (bits >> 23) & 0xffu;
+    mant = bits & 0x007fffffu;
+
+    if (exp == 0)
+        return 0;
+    if (exp == 0xffu)
+        return (sign << NBODY_F27_SIGN_SHIFT) | (0xfeu << NBODY_F27_EXP_SHIFT) |
+               NBODY_F27_MANT_MASK;
+
+    rounded_mant = (mant + 0x10u) >> 5;
+    if (rounded_mant == (1u << 18)) {
+        rounded_mant = 0;
+        exp++;
+        if (exp >= 0xffu) {
+            exp = 0xfeu;
+            rounded_mant = NBODY_F27_MANT_MASK;
+        }
+    }
+
+    return (sign << NBODY_F27_SIGN_SHIFT) |
+           (exp << NBODY_F27_EXP_SHIFT) |
+           (rounded_mant & NBODY_F27_MANT_MASK);
+}
+
+static void f27_bits_to_f32(uint32_t raw, float *value)
+{
+    uint32_t bits;
+    uint32_t sign;
+    uint32_t exp;
+    uint32_t mant;
+
+    raw &= NBODY_DATA_MASK;
+    if (raw == 0) {
+        bits = 0;
+    } else {
+        sign = (raw >> NBODY_F27_SIGN_SHIFT) & 1u;
+        exp = (raw >> NBODY_F27_EXP_SHIFT) & 0xffu;
+        mant = raw & NBODY_F27_MANT_MASK;
+
+        if (exp == 0) {
+            bits = 0;
+        } else {
+            bits = (sign << 31) | (exp << 23) | (mant << 5);
+        }
+    }
+
+    memcpy(value, &bits, sizeof(bits));
+}
+
 static int nbody_write_bodies(unsigned long arg)
 {
     nbody_bodies_arg_t barg;
@@ -63,15 +124,17 @@ static int nbody_write_bodies(unsigned long arg)
         return PTR_ERR(particles);
 
     /*
-     * N-body payloads are raw low-27-bit values. Writing VY_IN commits
-     * the current body in nbody_accel_avmm.sv and advances input_ptr.
+     * Userspace passes IEEE-754 single-precision values. Hardware payloads are
+     * rounded to S1E8M18 in the low 27 bits of each 32-bit Avalon word; the
+     * upper 5 bits are zero padding. Writing VY_IN commits the current body
+     * and advances input_ptr.
      */
     for (i = 0; i < barg.count; i++) {
-        iowrite32(particles[i].x & NBODY_DATA_MASK, dev.virtbase + REG_X_IN);
-        iowrite32(particles[i].y & NBODY_DATA_MASK, dev.virtbase + REG_Y_IN);
-        iowrite32(particles[i].mass & NBODY_DATA_MASK, dev.virtbase + REG_M_IN);
-        iowrite32(particles[i].vx & NBODY_DATA_MASK, dev.virtbase + REG_VX_IN);
-        iowrite32(particles[i].vy & NBODY_DATA_MASK, dev.virtbase + REG_VY_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].x), dev.virtbase + REG_X_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].y), dev.virtbase + REG_Y_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].mass), dev.virtbase + REG_M_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].vx), dev.virtbase + REG_VX_IN);
+        iowrite32(f32_to_f27_bits(&particles[i].vy), dev.virtbase + REG_VY_IN);
     }
 
     kfree(particles);
@@ -103,8 +166,8 @@ static int nbody_read_results(unsigned long arg)
      * hardware output pointer.
      */
     for (i = 0; i < rarg.count; i++) {
-        results[i].x = ioread32(dev.virtbase + REG_OUT_X) & NBODY_DATA_MASK;
-        results[i].y = ioread32(dev.virtbase + REG_OUT_Y) & NBODY_DATA_MASK;
+        f27_bits_to_f32(ioread32(dev.virtbase + REG_OUT_X), &results[i].x);
+        f27_bits_to_f32(ioread32(dev.virtbase + REG_OUT_Y), &results[i].y);
     }
 
     if (copy_to_user((void __user *)rarg.results, results, bytes))

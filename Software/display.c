@@ -243,8 +243,8 @@ void *display_thread(void *arg)
         display_clear();
         if (local_count > 0) {
             for (i = 0; i < local_num; i++) {
-                int x = raw27_to_screen_x(render_positions[i].x);
-                int y = raw27_to_screen_y(render_positions[i].y);
+                int x = world_to_screen_x(render_positions[i].x);
+                int y = world_to_screen_y(render_positions[i].y);
                 display_draw_body(x, y, (int)static_masses[i]);
             }
         }

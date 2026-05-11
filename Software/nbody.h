@@ -10,6 +10,10 @@
 #define MAX_HISTORY 32768
 #define BODY_DISPLAY_W 640
 #define BODY_DISPLAY_H 448
+#define NBODY_POS_MIN (-200.0f)
+#define NBODY_POS_MAX 200.0f
+#define NBODY_MASS_MIN 0.02f
+#define NBODY_MASS_MAX 0.1f
 
 extern int num_bodies;
 extern int current_gap;
@@ -31,9 +35,9 @@ extern pthread_cond_t frame_ready_cond;
 
 int allocate_history(void);
 void free_history(void);
-int get_radius_idx(uint32_t mass);
-int raw27_to_screen_x(uint32_t raw);
-int raw27_to_screen_y(uint32_t raw);
+int get_radius_idx(float mass);
+int world_to_screen_x(float x);
+int world_to_screen_y(float y);
 void reset_system(void);
 void *nbody_thread(void *arg);
 void *keyboard_handler(void *arg);

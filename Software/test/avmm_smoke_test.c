@@ -57,10 +57,9 @@ enum {
 #define VGA_WORDS_PER_ROW 20u
 #define VGA_FB_WORDS      (VGA_HEIGHT * VGA_WORDS_PER_ROW)
 
-/* 27-bit custom float S1E8M18 helpers for exact simple values. */
-#define FP27_ZERO 0x00000000u
-#define FP27_ONE  0x01FC0000u  /* sign=0, exp=127, mant=0 */
-#define FP27_TWO  0x02000000u  /* sign=0, exp=128, mant=0 */
+#define FP27_SIGN_SHIFT 26u
+#define FP27_EXP_SHIFT  18u
+#define FP27_MANT_MASK  0x0003FFFFu
 
 static inline void mmio_write(volatile uint32_t *base, uint32_t word_index, uint32_t value) {
     base[word_index] = value;
@@ -71,6 +70,39 @@ static inline uint32_t mmio_read(volatile uint32_t *base, uint32_t word_index) {
     uint32_t value = base[word_index];
     __sync_synchronize();
     return value;
+}
+
+static uint32_t f32_to_f27(float value) {
+    uint32_t bits;
+    uint32_t sign;
+    uint32_t exp;
+    uint32_t mant;
+    uint32_t rounded_mant;
+
+    memcpy(&bits, &value, sizeof(bits));
+    sign = (bits >> 31) & 1u;
+    exp = (bits >> 23) & 0xffu;
+    mant = bits & 0x007fffffu;
+
+    if (exp == 0u) {
+        return 0u;
+    }
+    if (exp == 0xffu) {
+        return (sign << FP27_SIGN_SHIFT) | (0xfeu << FP27_EXP_SHIFT) | FP27_MANT_MASK;
+    }
+
+    rounded_mant = (mant + 0x10u) >> 5;
+    if (rounded_mant == (1u << 18)) {
+        rounded_mant = 0u;
+        exp++;
+        if (exp >= 0xffu) {
+            exp = 0xfeu;
+            rounded_mant = FP27_MANT_MASK;
+        }
+    }
+
+    return (sign << FP27_SIGN_SHIFT) | (exp << FP27_EXP_SHIFT) |
+           (rounded_mant & FP27_MANT_MASK);
 }
 
 static uint32_t parse_hex_arg(const char *s, const char *name) {
@@ -154,14 +186,19 @@ static int test_nbody_one_body_output(volatile uint32_t *nb) {
     printf("[nbody] one-body input/output smoke test...\n");
 
     /* Load one body: x=1.0, y=2.0, m=1.0, vx=0, vy=0. */
+    const uint32_t x_in = f32_to_f27(1.0f);
+    const uint32_t y_in = f32_to_f27(2.0f);
+    const uint32_t m_in = f32_to_f27(1.0f);
+    const uint32_t zero = f32_to_f27(0.0f);
+
     mmio_write(nb, NB_READ, 0u);
     mmio_write(nb, NB_N_BODIES, 1u);
     mmio_write(nb, NB_GAP, 1u);
-    mmio_write(nb, NB_X_IN, FP27_ONE);
-    mmio_write(nb, NB_Y_IN, FP27_TWO);
-    mmio_write(nb, NB_M_IN, FP27_ONE);
-    mmio_write(nb, NB_VX_IN, FP27_ZERO);
-    mmio_write(nb, NB_VY_IN, FP27_ZERO); /* commits body 0 */
+    mmio_write(nb, NB_X_IN, x_in);
+    mmio_write(nb, NB_Y_IN, y_in);
+    mmio_write(nb, NB_M_IN, m_in);
+    mmio_write(nb, NB_VX_IN, zero);
+    mmio_write(nb, NB_VY_IN, zero); /* commits body 0 */
     mmio_write(nb, NB_GO, 1u);
 
     if (!poll_done(nb, 10000000u)) {
@@ -174,9 +211,9 @@ static int test_nbody_one_body_output(volatile uint32_t *nb) {
 
     printf("[info] OUT_X = 0x%08" PRIx32 ", OUT_Y = 0x%08" PRIx32 "\n", out_x, out_y);
     printf("[info] Expected for current N=1 zero-velocity smoke case is usually x=0x%08x, y=0x%08x.\n",
-           FP27_ONE, FP27_TWO);
+           x_in, y_in);
 
-    if (out_x == FP27_ONE && out_y == FP27_TWO) {
+    if (out_x == x_in && out_y == y_in) {
         printf("[pass] one-body output matches input position.\n");
     } else {
         printf("[warn] one-body output did not exactly match. This may indicate either a real issue or that the integrator/first-step path changed the value.\n");

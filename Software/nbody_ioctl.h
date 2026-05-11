@@ -12,19 +12,22 @@
 #define NBODY_MAX_BODIES 1024
 #define NBODY_DATA_W 27
 #define NBODY_DATA_MASK 0x07ffffffu
+#define NBODY_F27_SIGN_SHIFT 26
+#define NBODY_F27_EXP_SHIFT 18
+#define NBODY_F27_MANT_MASK 0x0003ffffu
 #define NBODY_MAGIC 'n'
 
 typedef struct {
-    uint32_t x;      /* low 27 bits used */
-    uint32_t y;      /* low 27 bits used */
-    uint32_t mass;   /* low 27 bits used */
-    uint32_t vx;     /* low 27 bits used */
-    uint32_t vy;     /* low 27 bits used */
+    float x;
+    float y;
+    float mass;
+    float vx;
+    float vy;
 } nbody_particle_t;
 
 typedef struct {
-    uint32_t x;      /* low 27 bits from OUT_X */
-    uint32_t y;      /* low 27 bits from OUT_Y */
+    float x;
+    float y;
 } nbody_result_t;
 
 typedef nbody_result_t body_pos_t;
