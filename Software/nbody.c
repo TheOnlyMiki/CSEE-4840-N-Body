@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,6 +31,8 @@ uint8_t endpoint_address;
 pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t frame_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t hw_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+#define HISTORY_DEBUG_FRAMES 16
 
 static unsigned long long monotonic_ms(void)
 {
@@ -67,6 +70,57 @@ void free_history(void)
 static float random_range(float min, float max)
 {
     return min + (max - min) * ((float)rand() / (float)RAND_MAX);
+}
+
+static int screen_coord_visible(int x, int y)
+{
+    return x >= 0 && x < BODY_DISPLAY_W && y >= 0 && y < BODY_DISPLAY_H;
+}
+
+static void debug_history_summary(const char *tag, int frame_idx,
+                                  const body_pos_t *positions, int count)
+{
+    int finite_count = 0;
+    int world_visible_count = 0;
+    int screen_visible_count = 0;
+    int zero_count = 0;
+    int limit = count < 8 ? count : 8;
+    int i;
+
+    if (frame_idx >= HISTORY_DEBUG_FRAMES)
+        return;
+
+    for (i = 0; i < count; i++) {
+        int sx;
+        int sy;
+
+        if (isfinite(positions[i].x) && isfinite(positions[i].y))
+            finite_count++;
+        if (positions[i].x >= NBODY_POS_MIN && positions[i].x <= NBODY_POS_MAX &&
+            positions[i].y >= NBODY_POS_MIN && positions[i].y <= NBODY_POS_MAX)
+            world_visible_count++;
+
+        sx = world_to_screen_x(positions[i].x);
+        sy = world_to_screen_y(positions[i].y);
+        if (screen_coord_visible(sx, sy))
+            screen_visible_count++;
+
+        if (positions[i].x == 0.0f && positions[i].y == 0.0f)
+            zero_count++;
+    }
+
+    fprintf(stderr,
+            "%s frame=%d count=%d finite=%d world_visible=%d screen_visible=%d zero=%d\n",
+            tag, frame_idx, count, finite_count, world_visible_count,
+            screen_visible_count, zero_count);
+    for (i = 0; i < limit; i++) {
+        int sx = world_to_screen_x(positions[i].x);
+        int sy = world_to_screen_y(positions[i].y);
+
+        fprintf(stderr, "  [%d] x=%f y=%f screen=(%d,%d)%s\n",
+                i, positions[i].x, positions[i].y, sx, sy,
+                screen_coord_visible(sx, sy) ? "" : " offscreen");
+    }
 }
 
 int get_radius_idx(float mass)
@@ -213,6 +267,7 @@ void reset_system(void)
     h_head = 1;
     h_count = 1;
     view_idx = 0;
+    debug_history_summary("history init", 0, history[0], local_num);
     pthread_cond_broadcast(&frame_ready_cond);
     pthread_mutex_unlock(&state_mutex);
 
@@ -276,6 +331,8 @@ void *nbody_thread(void *arg)
         rarg.count = (uint32_t)local_num;
         if (ioctl(nbody_fd, NBODY_READ_RESULTS, &rarg) < 0)
             perror("NBODY_READ_RESULTS");
+        else
+            debug_history_summary("history hw", h_head, history[next_idx], local_num);
 
         if (ioctl(nbody_fd, NBODY_CLEAR_READ) < 0)
             perror("NBODY_CLEAR_READ");

@@ -61,6 +61,7 @@ module nbody_accel_avmm #(
 
     logic        go_pulse;
     logic        read_reg;
+    logic        out_y_read_d;
     logic        done;
     logic        first_step_pending;
     logic        first_step_for_run;
@@ -180,6 +181,7 @@ module nbody_accel_avmm #(
         if (reset) begin
             go_pulse      <= 1'b0;
             read_reg      <= 1'b0;
+            out_y_read_d   <= 1'b0;
             first_step_pending <= 1'b1;
             first_step_for_run <= 1'b1;
             n_bodies_reg  <= 32'd0;
@@ -196,6 +198,7 @@ module nbody_accel_avmm #(
         end else begin
             go_pulse    <= 1'b0;
             cpu_body_we <= 1'b0;
+            out_y_read_d <= chipselect && read && (address == REG_OUT_Y);
 
             if (chipselect && write) begin
                 unique case (address)
@@ -240,7 +243,7 @@ module nbody_accel_avmm #(
                 endcase
             end
 
-            if (chipselect && read && (address == REG_OUT_Y)) begin
+            if ((chipselect && read && (address == REG_OUT_Y)) && !out_y_read_d) begin
                 if (output_ptr != MAX_BODY_PTR) begin
                     output_ptr <= output_ptr + 1'b1;
                 end

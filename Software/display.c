@@ -129,10 +129,8 @@ void display_clear_ui(void)
 
 void display_init_bodyshape(void)
 {
-    int i;
-
     memset(body_masks, 0, sizeof(body_masks));
-    for (i = 0; i < NUM_BODY_RADII; i++) {
+    for (int i = 0; i < NUM_BODY_RADII; i++) {
         int r = BODY_RADII[i];
         int x;
         int y;
@@ -146,21 +144,17 @@ void display_init_bodyshape(void)
 
 void display_draw_body(int cx, int cy, int radius_idx)
 {
-    int r;
-    int x;
-    int y;
-
     if (radius_idx < 0)
         radius_idx = 0;
     if (radius_idx >= NUM_BODY_RADII)
         radius_idx = NUM_BODY_RADII - 1;
 
-    r = BODY_RADII[radius_idx];
-    for (y = -r; y <= r; y++) {
+    int r = BODY_RADII[radius_idx];
+    for (int y = -r; y <= r; y++) {
         int sy = cy + y;
         if (sy < 0 || sy >= BODY_DISPLAY_H)
             continue;
-        for (x = -r; x <= r; x++)
+        for (int x = -r; x <= r; x++)
             if (body_masks[radius_idx][y + r][x + r])
                 set_pixel(cx + x, sy, 1);
     }
@@ -168,19 +162,16 @@ void display_draw_body(int cx, int cy, int radius_idx)
 
 void display_putchar(char c, int row, int col)
 {
-    int y;
-
     if (row < 0 || row >= TEXT_ROWS || col < 0 || col >= TEXT_COLS)
         return;
 
-    for (y = 0; y < FONT_HEIGHT; y++) {
+    for (int y = 0; y < FONT_HEIGHT; y++) {
         uint8_t bits = 0;
-        int x;
 
         if (y >= 2 && y < 16)
             bits = glyph_row(c, (y - 2) / 2);
 
-        for (x = 0; x < FONT_WIDTH; x++) {
+        for (int x = 0; x < FONT_WIDTH; x++) {
             int on = (x >= 1 && x <= 5) && (bits & (1u << (5 - x)));
             set_pixel(col * FONT_WIDTH + x, row * FONT_HEIGHT + y, on);
         }
