@@ -54,6 +54,11 @@ dkms.conf
 # debug information files
 *.dwo
 
+# OS/archive metadata
+.DS_Store
+__MACOSX/
+._*
+
 # Simulator work libraries
 /work/
 
