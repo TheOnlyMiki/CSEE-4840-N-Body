@@ -54,6 +54,11 @@ dkms.conf
 # debug information files
 *.dwo
 
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
 # OS/archive metadata
 .DS_Store
 __MACOSX/

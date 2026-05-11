@@ -602,8 +602,8 @@ fast_inv_sqrt_u27 = fast_inv_sqrt_u27_rtl
 # ============================================================
 # Top-level knobs
 # ============================================================
-INPUT_FILE = "../Hardware/tb/frame_input/frame0_256binit200_27bits.txt"
-OUT_ROOT = "../Hardware/tb/output/eps025_v4real_chiplike_256binit200"
+INPUT_FILE = "../Hardware/tb/frame_input/frame0_1024binit200_27bits.txt"
+OUT_ROOT = "../Hardware/tb/output/eps025_v4real_chiplike_1024binit200"
 # INPUT_FILE = "frame0_8binit10.txt"
 # OUT_ROOT = "eps025_v4real_chiplike_8binit10"
 
@@ -912,8 +912,8 @@ def main():
 # Match tb_core_accel input/output behavior
 # ============================================================
 
-TB_INPUT_FILE = "../Hardware/tb/frame_input/frame0_256binit200_27bits.txt"
-TB_GOLDEN_OUT = "../Hardware/tb/output/golden_accel_256binit200_27bits.txt"
+TB_INPUT_FILE = "../Hardware/tb/frame_input/frame0_1024binit200_27bits.txt"
+TB_GOLDEN_OUT = "../Hardware/tb/output/golden_accel_1024binit200_27bits.txt"
 
 def run_tb_compatible_golden():
     idx, px_u27, py_u27, vx_u27, vy_u27, m_u27 = load_frame0_u27(TB_INPUT_FILE)
@@ -942,8 +942,8 @@ import os
 # ============================================================
 # USER CONFIG
 # ============================================================
-RTL_FILE = "../Hardware/tb/output/eps025_accel_256binit200_27bits.txt"
-PY_FILE  = "../Hardware/tb/output/golden_accel_256binit200_27bits.txt"
+RTL_FILE = "../Hardware/tb/output/eps025_accel_1024binit200_27bits.txt"
+PY_FILE  = "../Hardware/tb/output/golden_accel_1024binit200_27bits.txt"
 # RTL_FILE = "eps025_temp_27bits_8binit10.txt"
 # PY_FILE  = "eps025_v4real_chiplike_8binit10/accel_core27_output/accel27_0.txt"
 

@@ -1,5 +1,5 @@
 module nbody_control #(
-    parameter int MAX_BODIES = 256,
+    parameter int MAX_BODIES = 1024,
     parameter int DATA_W = 27
 ) (
     input  logic clk,

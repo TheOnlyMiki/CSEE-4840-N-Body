@@ -15,13 +15,13 @@ module tb_core_accel;
   // -----------------------------
   // User knobs
   // -----------------------------
-  localparam int N_BODIES  = 256;   // <-- set any N you want
+  localparam int N_BODIES  = 1024;   // <-- set any N you want
   localparam int PIPE_LAT  = 18;  // as per your datapath
   parameter  int PREV_LAT  = 16;  // launch c0 -> prev sampled by final add
 
-  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200_27bits.txt";
-  localparam string OUT_FILE   = "tb/output/eps025_accel_256binit200_27bits.txt";
-  // localparam string OUT_FILE_27bits   = "tb/output/eps025new_temp_27bits_256binit200.txt";
+  localparam string INPUT_FILE = "tb/frame_input/frame0_1024binit200_27bits.txt";
+  localparam string OUT_FILE   = "tb/output/eps025_accel_1024binit200_27bits.txt";
+  // localparam string OUT_FILE_27bits   = "tb/output/eps025new_temp_27bits_1024binit200.txt";
 
   // -----------------------------
   // DUT IO (NEW CORE INTERFACE)

@@ -7,7 +7,7 @@ import numpy as np
 # =========================
 # User knobs
 # =========================
-N_PARTICLE    =  256
+N_PARTICLE    = 1024
 POS_MIN       = -200.0
 POS_MAX       =  200.0
 VEL_INIT_ZERO = True
@@ -17,7 +17,7 @@ MASS_MIN      =  0.2
 MASS_MAX      =  1.0
 RANDOM_SEED   = 0
 
-OUTPUT_HEX = "frame0_256binit200_27bits.txt"
+OUTPUT_HEX = "frame0_1024binit200_27bits.txt"
 
 # =========================
 # S1E8M18 helpers

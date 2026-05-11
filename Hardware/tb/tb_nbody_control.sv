@@ -2,12 +2,12 @@
 
 module tb_nbody_control;
 
-  localparam int MAX_BODIES = 256;
+  localparam int MAX_BODIES = 1024;
   localparam int DATA_W = 27;
-  localparam int PTR_W = 8;
+  localparam int PTR_W = $clog2(MAX_BODIES);
 
-  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200_27bits.txt";
-  localparam string OUT_FILE   = "tb/output/control_accel_256binit200_27bits.txt";
+  localparam string INPUT_FILE = "tb/frame_input/frame0_1024binit200_27bits.txt";
+  localparam string OUT_FILE   = "tb/output/control_accel_1024binit200_27bits.txt";
 
   logic clk;
   logic reset;

@@ -28,7 +28,7 @@
 // software loads body data again.
 
 module nbody_accel_avmm #(
-    parameter int MAX_BODIES = 256
+    parameter int MAX_BODIES = 1024
 ) (
     input  logic        clk,
     input  logic        reset,       // active-high Platform Designer reset

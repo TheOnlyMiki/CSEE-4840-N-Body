@@ -41,6 +41,14 @@
          type = "String";
       }
    }
+   element soc_system
+   {
+      datum _originalDeviceFamily
+      {
+         value = "Cyclone V";
+         type = "String";
+      }
+   }
    element vga_bitmap_avmm_0
    {
       datum _sortIndex
@@ -624,7 +632,7 @@
    kind="nbody_accel_avmm"
    version="1.0"
    enabled="1">
-  <parameter name="MAX_BODIES" value="256" />
+  <parameter name="MAX_BODIES" value="1024" />
  </module>
  <module
    name="vga_bitmap_avmm_0"

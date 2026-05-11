@@ -3,10 +3,10 @@
 module tb_four_core_wrapper;
 
   localparam int DATA_W = 27;
-  localparam int N_BODIES = 256;
+  localparam int N_BODIES = 1024;
   localparam integer PIPE_LAT = 18;
-  localparam string INPUT_FILE = "tb/frame_input/frame0_256binit200_27bits.txt";
-  localparam string OUT_FILE   = "tb/output/four_core_wrapper_accel_256binit200_27bits.txt";
+  localparam string INPUT_FILE = "tb/frame_input/frame0_1024binit200_27bits.txt";
+  localparam string OUT_FILE   = "tb/output/four_core_wrapper_accel_1024binit200_27bits.txt";
 
   logic         clk;
   logic         rst_n;
