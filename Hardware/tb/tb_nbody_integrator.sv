@@ -234,7 +234,7 @@ module tb_nbody_integrator;
              27'h3e80000, 27'h3e00000);
 
     run_case("signed", 27'h4040000, 27'h6040000, 27'h3fc0000, 27'h5fc0000,
-             27'hbfc0000, 27'h3fc0000);
+             27'h5fc0000, 27'h3fc0000);
 
     run_case("mantissa", 27'h3fc1234, 27'h4045678, 27'h3f8abcd, 27'h5f81234,
              27'h3e85555, 27'h3e8aaaa);

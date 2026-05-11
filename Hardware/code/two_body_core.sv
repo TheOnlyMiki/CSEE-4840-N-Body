@@ -30,7 +30,7 @@ module two_body_core #(
     parameter int DATA_W = 27
 ) (
     input  logic        i_clk,
-    input  logic        i_rst,   // active-low reset
+    input  logic        i_rst,   // active-low synchronous reset
 
     // 27-bit S1E8M18 inputs
     input  logic [DATA_W-1:0] i_b1_x,
@@ -78,7 +78,7 @@ module two_body_core #(
     logic [26:0] r_b2_y_c0;
     logic [26:0] r_m2_c0;
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_b1_x_c0 <= 27'd0;
             r_b1_y_c0 <= 27'd0;
@@ -161,7 +161,7 @@ module two_body_core #(
         .oProd(w_dy2_comb)
     );
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_dx2_c3 <= 27'd0;
             r_dy2_c3 <= 27'd0;
@@ -211,7 +211,7 @@ module two_body_core #(
     //--------------------------------------------------------------------------
     logic [26:0] r_s_c12;
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_s_c12 <= 27'd0;
         end else begin
@@ -224,7 +224,7 @@ module two_body_core #(
     //--------------------------------------------------------------------------
     logic [26:0] r_m2_pipe [12];
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             for (int i = 0; i < 12; i++) begin
                 r_m2_pipe[i] <= 27'd0;
@@ -260,7 +260,7 @@ module two_body_core #(
         .oProd(w_t_comb)
     );
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_s2_c13 <= 27'd0;
             r_t_c13  <= 27'd0;
@@ -282,7 +282,7 @@ module two_body_core #(
         .oProd(w_k_comb)
     );
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_k_c14 <= 27'd0;
         end else begin
@@ -296,7 +296,7 @@ module two_body_core #(
     logic [26:0] r_dx_pipe [12];
     logic [26:0] r_dy_pipe [12];
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             for (int i = 0; i < 12; i++) begin
                 r_dx_pipe[i] <= 27'd0;
@@ -339,7 +339,7 @@ module two_body_core #(
         .oProd(w_ay_term_c15)
     );
 
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             r_ax_term_c15 <= 27'd0;
             r_ay_term_c15 <= 27'd0;

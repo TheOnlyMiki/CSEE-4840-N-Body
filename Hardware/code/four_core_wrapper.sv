@@ -2,7 +2,7 @@ module four_core_wrapper #(
     parameter int DATA_W = 27
 ) (
     input  logic        i_clk,
-    input  logic        i_rst,
+    input  logic        i_rst,   // active-low synchronous reset
 
     // ============================================================
     // external phase control (no internal state machine here)
@@ -193,7 +193,7 @@ module four_core_wrapper #(
     // ============================================================
     // sequential state updates
     // ============================================================
-    always_ff @(posedge i_clk or negedge i_rst) begin
+    always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             for (i = 0; i < 16; i = i + 1) begin
                 i_x_mem[i] <= '0;

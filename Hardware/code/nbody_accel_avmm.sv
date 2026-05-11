@@ -176,7 +176,7 @@ module nbody_accel_avmm #(
         .accel_ay        (accel_ay)
     );
 
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clk) begin
         if (reset) begin
             go_pulse      <= 1'b0;
             read_reg      <= 1'b0;

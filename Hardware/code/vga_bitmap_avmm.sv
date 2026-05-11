@@ -113,7 +113,7 @@ module vga_bitmap_avmm (
         .port_b_readdata (scan_readdata)
     );
 
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clk) begin
         if (reset) begin
             active_video_d  <= 1'b0;
             bit_index_d     <= 5'd0;
@@ -177,7 +177,7 @@ module vga_counters(
 
    logic endOfLine;
 
-   always_ff @(posedge clk50 or posedge reset)
+   always_ff @(posedge clk50)
      if (reset)          hcount <= 0;
      else if (endOfLine) hcount <= 0;
      else                hcount <= hcount + 11'd 1;
@@ -186,7 +186,7 @@ module vga_counters(
 
    logic endOfField;
 
-   always_ff @(posedge clk50 or posedge reset)
+   always_ff @(posedge clk50)
      if (reset)          vcount <= 0;
      else if (endOfLine)
        if (endOfField)   vcount <= 0;

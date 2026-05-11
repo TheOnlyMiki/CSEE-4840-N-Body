@@ -83,7 +83,7 @@ module nbody_integrator #(
         .oSum(y_new_27)
     );
 
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clk) begin
         if (reset) begin
             state      <= ST_IDLE;
             wait_count <= 3'd0;

@@ -61,6 +61,8 @@ module nbody_control #(
     localparam int PTR_W = $clog2(MAX_BODIES);
     localparam logic [PTR_W-1:0] MAX_BODY_PTR = PTR_W'(MAX_BODIES - 1);
     localparam logic [PTR_W-1:0] TILE_STRIDE  = PTR_W'(16);
+    localparam int ACTIVE_W = PTR_W + 1;
+    localparam logic [31:0] MAX_BODIES_U32 = 32'(MAX_BODIES);
     localparam int PIPE_LAT = 18;
     localparam int WAIT_W = $clog2(PIPE_LAT + 4);
 
@@ -75,6 +77,8 @@ module nbody_control #(
     logic [WAIT_W-1:0] wait_count;
     logic [1:0] compute_grp;
     logic [1:0] store_lane;
+    logic [ACTIVE_W-1:0] active_count;
+    logic core_rst_n;
 
     logic        core_clear_prev;
     logic        core_load_en;
@@ -104,15 +108,30 @@ module nbody_control #(
     logic [DATA_W-1:0] integrator_vx_out;
     logic [DATA_W-1:0] integrator_vy_out;
 
-    function automatic logic [31:0] ptr_to_u32(input logic [PTR_W-1:0] value);
-        ptr_to_u32 = {{(32-PTR_W){1'b0}}, value};
+    function automatic logic [ACTIVE_W-1:0] ptr_to_active(input logic [PTR_W-1:0] value);
+        ptr_to_active = {{(ACTIVE_W-PTR_W){1'b0}}, value};
+    endfunction
+
+    function automatic logic [ACTIVE_W-1:0] load_idx_to_active(
+        input logic [3:0] value
+    );
+        load_idx_to_active = ACTIVE_W'(value);
+    endfunction
+
+    function automatic logic [ACTIVE_W-1:0] lane_idx_to_active(
+        input logic [PTR_W-1:0] base,
+        input logic [1:0]       grp,
+        input logic [1:0]       lane
+    );
+        lane_idx_to_active = ptr_to_active(base) + ACTIVE_W'({grp, 2'b00}) + ACTIVE_W'(lane);
     endfunction
 
     function automatic logic is_last_active_body(
         input logic [PTR_W-1:0] idx,
-        input logic [31:0]      active_bodies
+        input logic [ACTIVE_W-1:0] active_bodies
     );
-        is_last_active_body = (idx == MAX_BODY_PTR) || (ptr_to_u32(idx) + 32'd1 >= active_bodies);
+        is_last_active_body = (idx == MAX_BODY_PTR) ||
+                              (ptr_to_active(idx) + ACTIVE_W'(1) >= active_bodies);
     endfunction
 
     function automatic logic [PTR_W-1:0] lane_body_idx(
@@ -127,12 +146,12 @@ module nbody_control #(
         input logic [PTR_W-1:0] base,
         input logic [1:0]       grp,
         input logic [1:0]       lane,
-        input logic [31:0]      active_bodies
+        input logic [ACTIVE_W-1:0] active_bodies
     );
-        logic [31:0] idx32;
+        logic [ACTIVE_W-1:0] lane_idx;
         begin
-            idx32 = ptr_to_u32(base) + {28'd0, grp, 2'b00} + {30'd0, lane};
-            lane_is_active = (idx32 < active_bodies);
+            lane_idx = lane_idx_to_active(base, grp, lane);
+            lane_is_active = (lane_idx < active_bodies);
         end
     endfunction
 
@@ -140,24 +159,34 @@ module nbody_control #(
         input logic [PTR_W-1:0] base,
         input logic [1:0]       grp,
         input logic [PTR_W-1:0] j_idx,
-        input logic [31:0]      active_bodies
+        input logic [ACTIVE_W-1:0] active_bodies
     );
-        logic [31:0] lane0;
-        logic [31:0] lane1;
-        logic [31:0] lane2;
-        logic [31:0] lane3;
+        logic [ACTIVE_W-1:0] lane0;
+        logic [ACTIVE_W-1:0] lane1;
+        logic [ACTIVE_W-1:0] lane2;
+        logic [ACTIVE_W-1:0] lane3;
+        logic [ACTIVE_W-1:0] j_idx_active;
         begin
-            lane0 = ptr_to_u32(base) + {28'd0, grp, 2'b00} + 32'd0;
-            lane1 = ptr_to_u32(base) + {28'd0, grp, 2'b00} + 32'd1;
-            lane2 = ptr_to_u32(base) + {28'd0, grp, 2'b00} + 32'd2;
-            lane3 = ptr_to_u32(base) + {28'd0, grp, 2'b00} + 32'd3;
+            lane0 = lane_idx_to_active(base, grp, 2'd0);
+            lane1 = lane_idx_to_active(base, grp, 2'd1);
+            lane2 = lane_idx_to_active(base, grp, 2'd2);
+            lane3 = lane_idx_to_active(base, grp, 2'd3);
+            j_idx_active = ptr_to_active(j_idx);
 
-            make_lane_mask[0] = (lane0 >= active_bodies) || (lane0 == ptr_to_u32(j_idx));
-            make_lane_mask[1] = (lane1 >= active_bodies) || (lane1 == ptr_to_u32(j_idx));
-            make_lane_mask[2] = (lane2 >= active_bodies) || (lane2 == ptr_to_u32(j_idx));
-            make_lane_mask[3] = (lane3 >= active_bodies) || (lane3 == ptr_to_u32(j_idx));
+            make_lane_mask[0] = (lane0 >= active_bodies) || (lane0 == j_idx_active);
+            make_lane_mask[1] = (lane1 >= active_bodies) || (lane1 == j_idx_active);
+            make_lane_mask[2] = (lane2 >= active_bodies) || (lane2 == j_idx_active);
+            make_lane_mask[3] = (lane3 >= active_bodies) || (lane3 == j_idx_active);
         end
     endfunction
+
+    always_comb begin
+        if (n_bodies > MAX_BODIES_U32) begin
+            active_count = ACTIVE_W'(MAX_BODIES);
+        end else begin
+            active_count = n_bodies[ACTIVE_W-1:0];
+        end
+    end
 
     always_comb begin
         body_raddr = '0;
@@ -180,7 +209,7 @@ module nbody_control #(
             end
 
             ST_COMPUTE_GROUP: begin
-                if (is_last_active_body(j_body_idx, n_bodies)) begin
+                if (is_last_active_body(j_body_idx, active_count)) begin
                     body_raddr = j_body_idx;
                 end else begin
                     body_raddr = j_body_idx + 1'b1;
@@ -210,7 +239,7 @@ module nbody_control #(
         .DATA_W(DATA_W)
     ) u_core (
         .i_clk       (clk),
-        .i_rst       (~reset),
+        .i_rst       (core_rst_n),
         .i_clear_prev(core_clear_prev),
         .i_load_en   (core_load_en),
         .i_compute_en(core_compute_en),
@@ -252,8 +281,9 @@ module nbody_control #(
         .o_vy       (integrator_vy_out)
     );
 
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clk) begin
         if (reset) begin
+            core_rst_n            <= 1'b0;
             state                 <= ST_IDLE;
             update_next           <= UPD_DONE;
             done                  <= 1'b0;
@@ -294,6 +324,7 @@ module nbody_control #(
             integrator_start <= 1'b0;
             body_update_we   <= 1'b0;
             accel_we         <= 1'b0;
+            core_rst_n       <= 1'b1;
 
             unique case (state)
                 ST_IDLE: begin
@@ -306,7 +337,7 @@ module nbody_control #(
                         integrate_idx         <= '0;
                         timestep_count        <= 32'd0;
                         run_initial_half_step <= first_step;
-                        if (n_bodies == 32'd0) begin
+                        if (active_count == '0) begin
                             state <= ST_DONE;
                         end else begin
                             state <= ST_LOAD_TILE_PRIME;
@@ -321,7 +352,7 @@ module nbody_control #(
                 ST_LOAD_TILE: begin
                     core_load_en  <= 1'b1;
 
-                    if (ptr_to_u32(tile_base) + {28'd0, core_load_idx} < n_bodies) begin
+                    if (ptr_to_active(tile_base) + load_idx_to_active(core_load_idx) < active_count) begin
                         core_load_x <= body_x;
                         core_load_y <= body_y;
                     end else begin
@@ -358,9 +389,9 @@ module nbody_control #(
                     core_j_x        <= body_x;
                     core_j_y        <= body_y;
                     core_j_m        <= body_m;
-                    core_lane_mask  <= make_lane_mask(tile_base, compute_grp, j_body_idx, n_bodies);
+                    core_lane_mask  <= make_lane_mask(tile_base, compute_grp, j_body_idx, active_count);
 
-                    if (is_last_active_body(j_body_idx, n_bodies)) begin
+                    if (is_last_active_body(j_body_idx, active_count)) begin
                         wait_count <= '0;
                         state      <= ST_DRAIN_GROUP;
                     end else begin
@@ -382,7 +413,7 @@ module nbody_control #(
                 ST_STORE_GROUP: begin
                     core_grp_sel <= compute_grp;
 
-                    if (lane_is_active(tile_base, compute_grp, store_lane, n_bodies)) begin
+                    if (lane_is_active(tile_base, compute_grp, store_lane, active_count)) begin
                         accel_we    <= 1'b1;
                         accel_waddr <= lane_body_idx(tile_base, compute_grp, store_lane);
                         accel_ax    <= core_res_x[store_lane];
@@ -406,7 +437,7 @@ module nbody_control #(
                 end
 
                 ST_NEXT_TILE: begin
-                    if (ptr_to_u32(tile_base) + 32'd16 >= n_bodies) begin
+                    if (ptr_to_active(tile_base) + ACTIVE_W'(16) >= active_count) begin
                         integrate_idx <= '0;
                         state         <= ST_INTEGRATE_PRIME;
                     end else begin
@@ -435,7 +466,7 @@ module nbody_control #(
                         body_update_vx   <= integrator_vx_out;
                         body_update_vy   <= integrator_vy_out;
 
-                        if (is_last_active_body(integrate_idx, n_bodies)) begin
+                        if (is_last_active_body(integrate_idx, active_count)) begin
                             if (timestep_count + 32'd1 >= gap) begin
                                 update_next <= UPD_DONE;
                             end else begin

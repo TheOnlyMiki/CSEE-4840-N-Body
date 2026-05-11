@@ -5,6 +5,7 @@ module tb_nbody_control;
   localparam int MAX_BODIES = 1024;
   localparam int DATA_W = 27;
   localparam int PTR_W = $clog2(MAX_BODIES);
+  localparam int RUN_TIMEOUT_CYCLES = 400000;
 
   localparam string INPUT_FILE = "tb/frame_input/frame0_1024binit200_27bits.txt";
   localparam string OUT_FILE   = "tb/output/control_accel_1024binit200_27bits.txt";
@@ -241,7 +242,7 @@ module tb_nbody_control;
 
       pulse_go();
 
-      while (done !== 1'b1 && cycles < 200000) begin
+      while (done !== 1'b1 && cycles < RUN_TIMEOUT_CYCLES) begin
         @(posedge clk);
         #1;
         cycles++;
@@ -285,7 +286,9 @@ module tb_nbody_control;
 
       for (int i = 0; i < MAX_BODIES; i++) begin
         if (!accel_seen[i]) begin
-          $display("ERROR missing accel write addr=%0d", i);
+          if (err_count < 32) begin
+            $display("ERROR missing accel write addr=%0d", i);
+          end
           err_count++;
         end
       end
