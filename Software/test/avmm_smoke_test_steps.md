@@ -2,10 +2,11 @@
 
 ## Files needed on the board
 
-Copy these two files into one directory on the DE1-SoC, for example `/root/avmm_test`:
+Copy these files into one directory on the DE1-SoC, for example `/root/avmm_test`:
 
 - `avmm_smoke_test.c`
-- `Makefile` copied from `Makefile.smoke`
+- `avmm_frame_xy_dump.c`
+- `Makefile`
 
 ## Build
 
@@ -18,6 +19,7 @@ This produces:
 
 ```sh
 ./avmm_smoke_test
+./avmm_frame_xy_dump
 ```
 
 ## Find your Avalon offsets
@@ -65,6 +67,32 @@ Expected behavior:
 - VGA screen should show a border and diagonal pattern.
 - N-body `DONE` should go high for the simple zero-body/one-body smoke tests.
 - One-body output may warn if the integrator changes the position, but the test still confirms the basic read path.
+
+## Dump one frame's X/Y output
+
+After the smoke test passes, use `avmm_frame_xy_dump` to load one of the same
+six-column frame txt files used by the SystemVerilog testbench, run the
+accelerator once, and write X/Y positions for golden comparison:
+
+```sh
+make run-frame \
+  NBODY_OFFSET=0x00000 \
+  FRAME_INPUT=../../Hardware/tb/frame_input/frame0_1024binit200_27bits.txt \
+  FRAME_OUTPUT=hw_xy_1024.txt \
+  FRAME_N=1024 \
+  FRAME_GAP=1
+```
+
+The output file format is:
+
+```text
+# i x y (S1E8M18 hex)
+   0  20CE1A0  2156136
+```
+
+`FRAME_N` may be smaller than the frame file length if you want a faster
+bring-up run using the first N bodies. `FRAME_GAP` is the accelerator's internal
+timestep count between `DONE` pulses.
 
 ## If `/dev/mem` permission fails
 
