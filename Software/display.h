@@ -11,6 +11,8 @@
 #define BODY_DISPLAY_H 448
 #define NUM_BODY_RADII 4
 
+int world_to_screen_x(float x);
+int world_to_screen_y(float y);
 void display_clear(void);
 void display_init_bodyshape(void);
 void display_draw_body(int cx, int cy, int radius_idx);

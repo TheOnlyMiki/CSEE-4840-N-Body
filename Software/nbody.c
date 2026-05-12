@@ -4,13 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/ioctl.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "nbody.h"
-#include "usbkeyboard.h"
 
 int num_bodies = 0;
 int current_gap = 1;
@@ -26,21 +23,10 @@ static unsigned int sim_generation = 0;
 static int reset_waiting_for_play = 0;
 
 int nbody_fd = -1;
-struct libusb_device_handle *keyboard = NULL;
-uint8_t endpoint_address;
 
 pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t frame_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t hw_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-static unsigned long long monotonic_ms(void)
-{
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (unsigned long long)ts.tv_sec * 1000ull +
-           (unsigned long long)ts.tv_nsec / 1000000ull;
-}
 
 int allocate_history(void)
 {
@@ -80,21 +66,7 @@ int get_radius_idx(float mass)
     return 3;
 }
 
-int world_to_screen_x(float x)
-{
-    float normalized = (x - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-
-    return (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
-}
-
-int world_to_screen_y(float y)
-{
-    float normalized = (y - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-
-    return (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
-}
-
-static void set_gap_delta(int delta)
+void nbody_set_gap_delta(int delta)
 {
     nbody_config_t cfg;
 
@@ -114,7 +86,7 @@ static void set_gap_delta(int delta)
     }
 }
 
-static void show_frame_delta(int delta)
+void nbody_show_frame_delta(int delta)
 {
     pthread_mutex_lock(&state_mutex);
     is_paused = 1;
@@ -126,41 +98,38 @@ static void show_frame_delta(int delta)
     pthread_mutex_unlock(&state_mutex);
 }
 
-static void handle_keycode(uint8_t keycode)
+void nbody_toggle_pause(void)
 {
-    if (keycode == 0x2c) {
-        pthread_mutex_lock(&state_mutex);
-        is_paused = !is_paused;
-        if (!is_paused)
-            reset_waiting_for_play = 0;
-        pthread_cond_broadcast(&frame_ready_cond);
+    pthread_mutex_lock(&state_mutex);
+    is_paused = !is_paused;
+    if (!is_paused)
+        reset_waiting_for_play = 0;
+    pthread_cond_broadcast(&frame_ready_cond);
+    pthread_mutex_unlock(&state_mutex);
+}
+
+void nbody_request_reset(void)
+{
+    pthread_mutex_lock(&state_mutex);
+    if (reset_waiting_for_play) {
         pthread_mutex_unlock(&state_mutex);
-    } else if (keycode == 0x1a) {
-        set_gap_delta(1);
-    } else if (keycode == 0x16) {
-        set_gap_delta(-1);
-    } else if (keycode == 0x04) {
-        show_frame_delta(-1);
-    } else if (keycode == 0x07) {
-        show_frame_delta(1);
-    } else if (keycode == 0x15) {
-        pthread_mutex_lock(&state_mutex);
-        if (reset_waiting_for_play) {
-            pthread_mutex_unlock(&state_mutex);
-            return;
-        }
-        is_paused = 1;
-        reset_waiting_for_play = 1;
-        sim_generation++;
-        pthread_cond_broadcast(&frame_ready_cond);
-        pthread_mutex_unlock(&state_mutex);
-        reset_system();
-    } else if (keycode == 0x14) {
-        pthread_mutex_lock(&state_mutex);
-        running = 0;
-        pthread_cond_broadcast(&frame_ready_cond);
-        pthread_mutex_unlock(&state_mutex);
+        return;
     }
+    is_paused = 1;
+    reset_waiting_for_play = 1;
+    sim_generation++;
+    pthread_cond_broadcast(&frame_ready_cond);
+    pthread_mutex_unlock(&state_mutex);
+
+    reset_system();
+}
+
+void nbody_request_quit(void)
+{
+    pthread_mutex_lock(&state_mutex);
+    running = 0;
+    pthread_cond_broadcast(&frame_ready_cond);
+    pthread_mutex_unlock(&state_mutex);
 }
 
 void reset_system(void)
@@ -303,69 +272,6 @@ void *nbody_thread(void *arg)
         pthread_mutex_unlock(&hw_mutex);
         close(nbody_fd);
         nbody_fd = -1;
-    }
-
-    return NULL;
-}
-
-void *keyboard_handler(void *arg)
-{
-    enum {
-        REPEAT_DELAY_MS = 350,
-        REPEAT_INTERVAL_MS = 35,
-    };
-    struct usb_keyboard_packet packet;
-    uint8_t last_packet[8] = { 0 };
-    uint8_t held_repeat_key = 0;
-    unsigned long long next_repeat_ms = 0;
-
-    (void)arg;
-
-    while (running) {
-        int transferred = 0;
-
-        int rc = libusb_interrupt_transfer(keyboard, endpoint_address,
-                                       (unsigned char *)&packet, sizeof(packet),
-                                       &transferred, 50);
-        unsigned long long now = monotonic_ms();
-
-        if (rc == LIBUSB_ERROR_TIMEOUT) {
-            if (held_repeat_key && now >= next_repeat_ms) {
-                handle_keycode(held_repeat_key);
-                next_repeat_ms = now + REPEAT_INTERVAL_MS;
-            }
-            continue;
-        }
-        if (rc != 0 || transferred != sizeof(packet))
-            continue;
-
-        int same_packet = (memcmp(&packet, last_packet, sizeof(packet)) == 0);
-        if (!same_packet)
-            memcpy(last_packet, &packet, sizeof(packet));
-
-        uint8_t keycode = packet.keycode[0];
-        if (keycode == 0) {
-            held_repeat_key = 0;
-            continue;
-        }
-
-        if (keycode == 0x04 || keycode == 0x07) {
-            if (!same_packet || held_repeat_key != keycode) {
-                handle_keycode(keycode);
-                held_repeat_key = keycode;
-                next_repeat_ms = now + REPEAT_DELAY_MS;
-            } else if (now >= next_repeat_ms) {
-                handle_keycode(keycode);
-                next_repeat_ms = now + REPEAT_INTERVAL_MS;
-            }
-            continue;
-        }
-
-        held_repeat_key = 0;
-        if (same_packet)
-            continue;
-
-        handle_keycode(keycode);
     }
 
     return NULL;

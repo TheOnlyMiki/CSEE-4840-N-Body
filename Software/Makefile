@@ -13,10 +13,11 @@ CFLAGS += -Wall -Wextra -pthread
 LDLIBS += -lusb-1.0 -pthread
 
 APP = nbody_app
-OBJECTS = main.o nbody.o display.o usbkeyboard.o
+OBJECTS = main.o nbody.o display.o keyboard.o usbkeyboard.o
 
 TARFILES = Makefile main.c nbody.c nbody.h nbody_ioctl.h \
         display.h display.c display_ioctl.h \
+        keyboard.h keyboard.c \
         usbkeyboard.h usbkeyboard.c accelerator_driver.c display_driver.c
 
 .PHONY: all app modules modules-clean clean distclean
@@ -28,9 +29,10 @@ app: $(APP)
 $(APP): $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS) $(LDLIBS)
 
-main.o: main.c display.h usbkeyboard.h nbody.h nbody_ioctl.h display_ioctl.h
-nbody.o: nbody.c nbody.h usbkeyboard.h nbody_ioctl.h
+main.o: main.c display.h keyboard.h nbody.h nbody_ioctl.h display_ioctl.h
+nbody.o: nbody.c nbody.h nbody_ioctl.h
 display.o: display.c display.h display_ioctl.h nbody.h nbody_ioctl.h
+keyboard.o: keyboard.c keyboard.h usbkeyboard.h nbody.h nbody_ioctl.h
 usbkeyboard.o: usbkeyboard.c usbkeyboard.h
 
 modules:

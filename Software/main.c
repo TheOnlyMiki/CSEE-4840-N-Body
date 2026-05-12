@@ -5,8 +5,8 @@
 #include <time.h>
 
 #include "display.h"
+#include "keyboard.h"
 #include "nbody.h"
-#include "usbkeyboard.h"
 
 int main(int argc, char **argv)
 {
@@ -40,10 +40,7 @@ int main(int argc, char **argv)
 
     srand((unsigned int)time(NULL));
 
-    keyboard = openkeyboard(&endpoint_address);
-    if (!keyboard)
-        fprintf(stderr, "Warning: did not find a USB keyboard\n");
-    else
+    if (keyboard_open())
         have_keyboard = 1;
 
     if (pthread_create(&sim_thread, NULL, nbody_thread, NULL) != 0) {

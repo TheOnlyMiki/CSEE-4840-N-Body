@@ -92,6 +92,20 @@ static uint8_t glyph_row(char c, int row)
     return g[row];
 }
 
+int world_to_screen_x(float x)
+{
+    float normalized = (x - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
+
+    return (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
+}
+
+int world_to_screen_y(float y)
+{
+    float normalized = (y - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
+
+    return (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
+}
+
 void display_clear(void)
 {
     memset(framebuffer, 0, sizeof(framebuffer));

@@ -3,7 +3,6 @@
 
 #include <pthread.h>
 #include <stdint.h>
-#include <libusb-1.0/libusb.h>
 #include "nbody_ioctl.h"
 
 #define MAX_BODIES NBODY_MAX_BODIES
@@ -28,8 +27,6 @@ extern int h_count;
 extern int view_idx;
 
 extern int nbody_fd;
-extern struct libusb_device_handle *keyboard;
-extern uint8_t endpoint_address;
 
 extern pthread_mutex_t state_mutex;
 extern pthread_cond_t frame_ready_cond;
@@ -37,10 +34,12 @@ extern pthread_cond_t frame_ready_cond;
 int allocate_history(void);
 void free_history(void);
 int get_radius_idx(float mass);
-int world_to_screen_x(float x);
-int world_to_screen_y(float y);
+void nbody_set_gap_delta(int delta);
+void nbody_show_frame_delta(int delta);
+void nbody_toggle_pause(void);
+void nbody_request_reset(void);
+void nbody_request_quit(void);
 void reset_system(void);
 void *nbody_thread(void *arg);
-void *keyboard_handler(void *arg);
 
 #endif
