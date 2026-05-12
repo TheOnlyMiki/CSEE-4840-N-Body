@@ -23,8 +23,8 @@ int main(int argc, char **argv)
     num_bodies = atoi(argv[1]);
     current_gap = atoi(argv[2]);
 
-    if (num_bodies < 1 || num_bodies > MAX_BODIES) {
-        fprintf(stderr, "Num Bodies must be between 1 and %d\n", MAX_BODIES);
+    if (num_bodies < 5 || num_bodies > MAX_BODIES) {
+        fprintf(stderr, "Num Bodies must be between 5 and %d\n", MAX_BODIES);
         return 1;
     }
     if (current_gap < 1 || current_gap > NBODY_GAP_MAX) {

@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <fcntl.h>
-#include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,6 +22,8 @@ body_pos_t *history[MAX_HISTORY];
 int h_head = 0;
 int h_count = 0;
 int view_idx = 0;
+static unsigned int sim_generation = 0;
+static int reset_waiting_for_play = 0;
 
 int nbody_fd = -1;
 struct libusb_device_handle *keyboard = NULL;
@@ -31,8 +32,6 @@ uint8_t endpoint_address;
 pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t frame_ready_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t hw_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-#define HISTORY_DEBUG_FRAMES 16
 
 static unsigned long long monotonic_ms(void)
 {
@@ -45,9 +44,7 @@ static unsigned long long monotonic_ms(void)
 
 int allocate_history(void)
 {
-    int i;
-
-    for (i = 0; i < MAX_HISTORY; i++) {
+    for (int i = 0; i < MAX_HISTORY; i++) {
         history[i] = malloc(MAX_BODIES * sizeof(body_pos_t));
         if (!history[i]) {
             free_history();
@@ -59,9 +56,7 @@ int allocate_history(void)
 
 void free_history(void)
 {
-    int i;
-
-    for (i = 0; i < MAX_HISTORY; i++) {
+    for (int i = 0; i < MAX_HISTORY; i++) {
         free(history[i]);
         history[i] = NULL;
     }
@@ -70,57 +65,6 @@ void free_history(void)
 static float random_range(float min, float max)
 {
     return min + (max - min) * ((float)rand() / (float)RAND_MAX);
-}
-
-static int screen_coord_visible(int x, int y)
-{
-    return x >= 0 && x < BODY_DISPLAY_W && y >= 0 && y < BODY_DISPLAY_H;
-}
-
-static void debug_history_summary(const char *tag, int frame_idx,
-                                  const body_pos_t *positions, int count)
-{
-    int finite_count = 0;
-    int world_visible_count = 0;
-    int screen_visible_count = 0;
-    int zero_count = 0;
-    int limit = count < 8 ? count : 8;
-    int i;
-
-    if (frame_idx >= HISTORY_DEBUG_FRAMES)
-        return;
-
-    for (i = 0; i < count; i++) {
-        int sx;
-        int sy;
-
-        if (isfinite(positions[i].x) && isfinite(positions[i].y))
-            finite_count++;
-        if (positions[i].x >= NBODY_POS_MIN && positions[i].x <= NBODY_POS_MAX &&
-            positions[i].y >= NBODY_POS_MIN && positions[i].y <= NBODY_POS_MAX)
-            world_visible_count++;
-
-        sx = world_to_screen_x(positions[i].x);
-        sy = world_to_screen_y(positions[i].y);
-        if (screen_coord_visible(sx, sy))
-            screen_visible_count++;
-
-        if (positions[i].x == 0.0f && positions[i].y == 0.0f)
-            zero_count++;
-    }
-
-    fprintf(stderr,
-            "%s frame=%d count=%d finite=%d world_visible=%d screen_visible=%d zero=%d\n",
-            tag, frame_idx, count, finite_count, world_visible_count,
-            screen_visible_count, zero_count);
-    for (i = 0; i < limit; i++) {
-        int sx = world_to_screen_x(positions[i].x);
-        int sy = world_to_screen_y(positions[i].y);
-
-        fprintf(stderr, "  [%d] x=%f y=%f screen=(%d,%d)%s\n",
-                i, positions[i].x, positions[i].y, sx, sy,
-                screen_coord_visible(sx, sy) ? "" : " offscreen");
-    }
 }
 
 int get_radius_idx(float mass)
@@ -187,6 +131,8 @@ static void handle_keycode(uint8_t keycode)
     if (keycode == 0x2c) {
         pthread_mutex_lock(&state_mutex);
         is_paused = !is_paused;
+        if (!is_paused)
+            reset_waiting_for_play = 0;
         pthread_cond_broadcast(&frame_ready_cond);
         pthread_mutex_unlock(&state_mutex);
     } else if (keycode == 0x1a) {
@@ -199,7 +145,14 @@ static void handle_keycode(uint8_t keycode)
         show_frame_delta(1);
     } else if (keycode == 0x15) {
         pthread_mutex_lock(&state_mutex);
+        if (reset_waiting_for_play) {
+            pthread_mutex_unlock(&state_mutex);
+            return;
+        }
         is_paused = 1;
+        reset_waiting_for_play = 1;
+        sim_generation++;
+        pthread_cond_broadcast(&frame_ready_cond);
         pthread_mutex_unlock(&state_mutex);
         reset_system();
     } else if (keycode == 0x14) {
@@ -213,13 +166,10 @@ static void handle_keycode(uint8_t keycode)
 void reset_system(void)
 {
     nbody_particle_t *init_particles;
-    int local_num;
-    int local_gap;
-    int i;
 
     pthread_mutex_lock(&state_mutex);
-    local_num = num_bodies;
-    local_gap = current_gap;
+    int local_num = num_bodies;
+    int local_gap = current_gap;
     pthread_mutex_unlock(&state_mutex);
 
     init_particles = malloc(local_num * sizeof(*init_particles));
@@ -229,7 +179,7 @@ void reset_system(void)
     }
 
     pthread_mutex_lock(&state_mutex);
-    for (i = 0; i < local_num; i++) {
+    for (int i = 0; i < local_num; i++) {
         float mass = random_range(NBODY_MASS_MIN, NBODY_MASS_MAX);
 
         init_particles[i].x = random_range(NBODY_POS_MIN, NBODY_POS_MAX);
@@ -267,7 +217,6 @@ void reset_system(void)
     h_head = 1;
     h_count = 1;
     view_idx = 0;
-    debug_history_summary("history init", 0, history[0], local_num);
     pthread_cond_broadcast(&frame_ready_cond);
     pthread_mutex_unlock(&state_mutex);
 
@@ -285,15 +234,15 @@ void *nbody_thread(void *arg)
     reset_system();
 
     while (running) {
-        int paused;
-        int local_num;
-        int next_idx;
-        int done = 0;
         nbody_read_arg_t rarg;
 
+        int done = 0;
+        unsigned int local_generation;
+
         pthread_mutex_lock(&state_mutex);
-        paused = is_paused;
-        local_num = num_bodies;
+        int paused = is_paused;
+        int local_num = num_bodies;
+        local_generation = sim_generation;
         pthread_mutex_unlock(&state_mutex);
 
         if (paused || nbody_fd < 0) {
@@ -302,7 +251,7 @@ void *nbody_thread(void *arg)
         }
 
         pthread_mutex_lock(&state_mutex);
-        next_idx = h_head & (MAX_HISTORY - 1);
+        int next_idx = h_head & (MAX_HISTORY - 1);
         pthread_mutex_unlock(&state_mutex);
 
         pthread_mutex_lock(&hw_mutex);
@@ -331,19 +280,19 @@ void *nbody_thread(void *arg)
         rarg.count = (uint32_t)local_num;
         if (ioctl(nbody_fd, NBODY_READ_RESULTS, &rarg) < 0)
             perror("NBODY_READ_RESULTS");
-        else
-            debug_history_summary("history hw", h_head, history[next_idx], local_num);
 
         if (ioctl(nbody_fd, NBODY_CLEAR_READ) < 0)
             perror("NBODY_CLEAR_READ");
         pthread_mutex_unlock(&hw_mutex);
 
         pthread_mutex_lock(&state_mutex);
-        h_head = (h_head + 1) & (MAX_HISTORY - 1);
-        if (h_count < MAX_HISTORY)
-            h_count++;
-        view_idx = h_count - 1;
-        pthread_cond_broadcast(&frame_ready_cond);
+        if (local_generation == sim_generation) {
+            h_head = (h_head + 1) & (MAX_HISTORY - 1);
+            if (h_count < MAX_HISTORY)
+                h_count++;
+            view_idx = h_count - 1;
+            pthread_cond_broadcast(&frame_ready_cond);
+        }
         pthread_mutex_unlock(&state_mutex);
     }
 
@@ -374,15 +323,11 @@ void *keyboard_handler(void *arg)
 
     while (running) {
         int transferred = 0;
-        int rc;
-        uint8_t keycode;
-        int same_packet;
-        unsigned long long now;
 
-        rc = libusb_interrupt_transfer(keyboard, endpoint_address,
+        int rc = libusb_interrupt_transfer(keyboard, endpoint_address,
                                        (unsigned char *)&packet, sizeof(packet),
                                        &transferred, 50);
-        now = monotonic_ms();
+        unsigned long long now = monotonic_ms();
 
         if (rc == LIBUSB_ERROR_TIMEOUT) {
             if (held_repeat_key && now >= next_repeat_ms) {
@@ -394,11 +339,11 @@ void *keyboard_handler(void *arg)
         if (rc != 0 || transferred != sizeof(packet))
             continue;
 
-        same_packet = (memcmp(&packet, last_packet, sizeof(packet)) == 0);
+        int same_packet = (memcmp(&packet, last_packet, sizeof(packet)) == 0);
         if (!same_packet)
             memcpy(last_packet, &packet, sizeof(packet));
 
-        keycode = packet.keycode[0];
+        uint8_t keycode = packet.keycode[0];
         if (keycode == 0) {
             held_repeat_key = 0;
             continue;

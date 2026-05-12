@@ -10,11 +10,11 @@
 #define MAX_HISTORY 32768
 #define BODY_DISPLAY_W 640
 #define BODY_DISPLAY_H 448
-#define NBODY_POS_MIN (-200.0f)
-#define NBODY_POS_MAX 200.0f
+#define NBODY_POS_MIN (-10.0f)
+#define NBODY_POS_MAX 10.0f
 #define NBODY_MASS_MIN 0.002f
 #define NBODY_MASS_MAX 0.01f
-#define NBODY_GAP_MAX 50
+#define NBODY_GAP_MAX 10
 
 extern int num_bodies;
 extern int current_gap;

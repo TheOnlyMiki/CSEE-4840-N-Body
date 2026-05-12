@@ -22,19 +22,13 @@ static const int BODY_RADII[NUM_BODY_RADII] = { 1, 2, 3, 4 };
  */
 static inline void set_pixel(int x, int y, int on)
 {
-    int word;
-    int bit;
-
     if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT)
         return;
 
-    word = y * DISPLAY_WORDS_PER_ROW + x / 32;
-    bit = x % 32;
-
     if (on)
-        framebuffer[word] |= (1u << bit);
+        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] |= (1u << (x % 32));
     else
-        framebuffer[word] &= ~(1u << bit);
+        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] &= ~(1u << (x % 32));
 }
 
 static uint8_t glyph_row(char c, int row)
@@ -132,11 +126,9 @@ void display_init_bodyshape(void)
     memset(body_masks, 0, sizeof(body_masks));
     for (int i = 0; i < NUM_BODY_RADII; i++) {
         int r = BODY_RADII[i];
-        int x;
-        int y;
 
-        for (y = -r; y <= r; y++)
-            for (x = -r; x <= r; x++)
+        for (int y = -r; y <= r; y++)
+            for (int x = -r; x <= r; x++)
                 if (x * x + y * y < r * r + r)
                     body_masks[i][y + r][x + r] = 1;
     }
@@ -144,11 +136,6 @@ void display_init_bodyshape(void)
 
 void display_draw_body(int cx, int cy, int radius_idx)
 {
-    if (radius_idx < 0)
-        radius_idx = 0;
-    if (radius_idx >= NUM_BODY_RADII)
-        radius_idx = NUM_BODY_RADII - 1;
-
     int r = BODY_RADII[radius_idx];
     for (int y = -r; y <= r; y++) {
         int sy = cy + y;
@@ -205,35 +192,25 @@ void *display_thread(void *arg)
     display_init_bodyshape();
 
     while (running) {
-        int local_num;
-        int local_gap;
-        int local_count;
-        int local_view;
-        int local_paused;
-        int slot;
-        char line1[TEXT_COLS + 1];
-        int i;
-
         pthread_mutex_lock(&state_mutex);
-        local_num = num_bodies;
-        local_gap = current_gap;
-        local_count = h_count;
-        local_view = view_idx;
-        local_paused = is_paused;
+        int local_num = num_bodies;
+        int local_gap = current_gap;
+        int local_count = h_count;
+        int local_view = view_idx;
+        int local_paused = is_paused;
+
+        char line1[TEXT_COLS + 1];
 
         if (local_count > 0) {
-            if (local_count < MAX_HISTORY)
-                slot = local_view;
-            else
-                slot = (h_head + local_view) & (MAX_HISTORY - 1);
-            memcpy(render_positions, history[slot],
-                   local_num * sizeof(*render_positions));
+            int slot = (local_count < MAX_HISTORY) ? local_view : (h_head + local_view) & (MAX_HISTORY - 1);
+        
+            memcpy(render_positions, history[slot], local_num * sizeof(*render_positions));
         }
         pthread_mutex_unlock(&state_mutex);
 
         display_clear();
         if (local_count > 0) {
-            for (i = 0; i < local_num; i++) {
+            for (int i = 0; i < local_num; i++) {
                 int x = world_to_screen_x(render_positions[i].x);
                 int y = world_to_screen_y(render_positions[i].y);
                 display_draw_body(x, y, (int)static_masses[i]);
@@ -256,5 +233,6 @@ void *display_thread(void *arg)
     }
     display_close_device();
     free(render_positions);
+
     return NULL;
 }
