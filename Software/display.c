@@ -26,9 +26,9 @@ static inline void set_pixel(int x, int y, int on)
         return;
 
     if (on)
-        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] |= (1u << (x % 32));
+        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] |= (1u << (x & 31));
     else
-        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] &= ~(1u << (x % 32));
+        framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] &= ~(1u << (x & 31));
 }
 
 static uint8_t glyph_row(char c, int row)
@@ -92,33 +92,9 @@ static uint8_t glyph_row(char c, int row)
     return g[row];
 }
 
-int display_open_device(const char *path)
-{
-    display_fd = open(path, O_RDWR);
-    return display_fd;
-}
-
-void display_close_device(void)
-{
-    if (display_fd >= 0)
-        close(display_fd);
-    display_fd = -1;
-}
-
 void display_clear(void)
 {
     memset(framebuffer, 0, sizeof(framebuffer));
-}
-
-void display_clear_bodyscreen(void)
-{
-    memset(framebuffer, 0, DISPLAY_WORDS_PER_ROW * BODY_DISPLAY_H * sizeof(uint32_t));
-}
-
-void display_clear_ui(void)
-{
-    memset(&framebuffer[DISPLAY_WORDS_PER_ROW * BODY_DISPLAY_H], 0,
-           DISPLAY_WORDS_PER_ROW * (DISPLAY_HEIGHT - BODY_DISPLAY_H) * sizeof(uint32_t));
 }
 
 void display_init_bodyshape(void)
@@ -186,7 +162,8 @@ void *display_thread(void *arg)
     if (!render_positions)
         return NULL;
 
-    if (display_open_device("/dev/nbody_display") < 0)
+    display_fd = open("/dev/nbody_display", O_RDWR);
+    if (display_fd < 0)
         perror("open /dev/nbody_display");
 
     display_init_bodyshape();
@@ -231,7 +208,11 @@ void *display_thread(void *arg)
         display_clear();
         display_present();
     }
-    display_close_device();
+
+    if (display_fd >= 0)
+        close(display_fd);
+    display_fd = -1;
+
     free(render_positions);
 
     return NULL;

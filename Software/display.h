@@ -11,11 +11,7 @@
 #define BODY_DISPLAY_H 448
 #define NUM_BODY_RADII 4
 
-int display_open_device(const char *path);
-void display_close_device(void);
 void display_clear(void);
-void display_clear_bodyscreen(void);
-void display_clear_ui(void);
 void display_init_bodyshape(void);
 void display_draw_body(int cx, int cy, int radius_idx);
 void display_putchar(char c, int row, int col);
