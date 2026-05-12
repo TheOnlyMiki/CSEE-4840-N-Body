@@ -79,6 +79,7 @@ module nbody_control #(
     logic [1:0] compute_grp;
     logic [1:0] store_lane;
     logic [ACTIVE_W-1:0] active_count;
+    logic [ACTIVE_W-1:0] active_count_next;
     logic core_rst_n;
 
     logic        core_clear_prev;
@@ -188,9 +189,9 @@ module nbody_control #(
 
     always_comb begin
         if (n_bodies > MAX_BODIES_U32) begin
-            active_count = ACTIVE_W'(MAX_BODIES);
+            active_count_next = ACTIVE_W'(MAX_BODIES);
         end else begin
-            active_count = n_bodies[ACTIVE_W-1:0];
+            active_count_next = n_bodies[ACTIVE_W-1:0];
         end
     end
 
@@ -303,6 +304,7 @@ module nbody_control #(
             wait_count            <= '0;
             compute_grp           <= 2'd0;
             store_lane            <= 2'd0;
+            active_count          <= '0;
             core_clear_prev       <= 1'b0;
             core_load_en          <= 1'b0;
             core_compute_en       <= 1'b0;
@@ -351,7 +353,8 @@ module nbody_control #(
                         integrate_idx         <= '0;
                         timestep_count        <= 32'd0;
                         run_initial_half_step <= first_step;
-                        if (active_count == '0) begin
+                        active_count          <= active_count_next;
+                        if (active_count_next == '0) begin
                             state <= ST_DONE;
                         end else begin
                             state <= ST_LOAD_TILE_PRIME;
