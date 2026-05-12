@@ -4,9 +4,9 @@
 //
 // This drives the wrapper the same way nbody_control intends to use it:
 //   - load one 16-body tile into wrapper local memory
-//   - for each 4-lane group in that tile, clear wrapper accumulation state
-//   - stream every j body through the wrapper
-//   - after the pipeline drains, sample the 4 accumulated lane outputs
+//   - clear wrapper accumulation state once for the tile
+//   - for each j body, hold j stable while groups 0,1,2,3 are issued
+//   - after the pipeline drains, sample all 16 accumulated lane outputs
 //
 // Output format intentionally matches tb_core_accel.sv:
 //   # i ax ay (S1E8M18 hex)
@@ -167,11 +167,11 @@ module tb_four_core_wrapper;
     end
   endtask
 
-  task automatic pulse_clear_prev(input [1:0] grp_sel);
+  task automatic pulse_clear_prev;
     begin
       @(negedge clk);
       drive_idle();
-      i_grp_sel = grp_sel;
+      i_grp_sel = 2'd0;
       i_clear_prev = 1'b1;
       @(posedge clk);
       @(negedge clk);
@@ -209,20 +209,25 @@ module tb_four_core_wrapper;
     end
   endtask
 
-  task automatic drain_group(input [1:0] grp_sel);
+  task automatic drain_tile;
     begin
       @(negedge clk);
       drive_idle();
-      i_grp_sel = grp_sel;
+      i_grp_sel = 2'd0;
 
       for (int cyc = 0; cyc < PIPE_LAT + 4; cyc++) begin
         @(posedge clk);
       end
 
-      #1;
-      if (o_res_vld !== 1'b1) begin
-        $display("ERROR: o_res_vld not set for tile group %0d at t=%0t", grp_sel, $time);
-        err_count++;
+      for (int grp = 0; grp < N_GROUPS; grp++) begin
+        @(negedge clk);
+        drive_idle();
+        i_grp_sel = grp[1:0];
+        #1;
+        if (o_res_vld !== 1'b1) begin
+          $display("ERROR: o_res_vld not set for tile group %0d at t=%0t", grp, $time);
+          err_count++;
+        end
       end
     end
   endtask
@@ -242,11 +247,10 @@ module tb_four_core_wrapper;
     begin
       load_tile(tile_base);
       repeat (2) @(posedge clk);
+      pulse_clear_prev();
 
-      for (int grp = 0; grp < N_GROUPS; grp++) begin
-        pulse_clear_prev(grp[1:0]);
-
-        for (int j = 0; j < N_BODIES; j++) begin
+      for (int j = 0; j < N_BODIES; j++) begin
+        for (int grp = 0; grp < N_GROUPS; grp++) begin
           issue_one_compute(grp[1:0],
                             make_lane_mask(tile_base, grp, j),
                             px[j], py[j], m[j]);
@@ -255,8 +259,14 @@ module tb_four_core_wrapper;
             $fatal(1, "ERROR: timeout while streaming wrapper computes");
           end
         end
+      end
 
-        drain_group(grp[1:0]);
+      drain_tile();
+      for (int grp = 0; grp < N_GROUPS; grp++) begin
+        @(negedge clk);
+        drive_idle();
+        i_grp_sel = grp[1:0];
+        #1;
         save_group(tile_base, grp);
       end
     end

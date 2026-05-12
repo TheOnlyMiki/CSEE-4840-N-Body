@@ -73,6 +73,7 @@ module nbody_control #(
     logic run_initial_half_step;
     logic [PTR_W-1:0] tile_base;
     logic [PTR_W-1:0] j_body_idx;
+    logic [PTR_W-1:0] current_j_idx;
     logic [PTR_W-1:0] integrate_idx;
     logic [WAIT_W-1:0] wait_count;
     logic [1:0] compute_grp;
@@ -83,6 +84,7 @@ module nbody_control #(
     logic        core_clear_prev;
     logic        core_load_en;
     logic        core_compute_en;
+    logic [3:0]  load_idx_count;
     logic [3:0]  core_load_idx;
     logic [DATA_W-1:0] core_load_x;
     logic [DATA_W-1:0] core_load_y;
@@ -91,6 +93,10 @@ module nbody_control #(
     logic [DATA_W-1:0] core_j_y;
     logic [DATA_W-1:0] core_j_m;
     logic [3:0]  core_lane_mask;
+
+    logic [DATA_W-1:0] current_j_x;
+    logic [DATA_W-1:0] current_j_y;
+    logic [DATA_W-1:0] current_j_m;
 
     logic [DATA_W-1:0] core_res_x [4];
     logic [DATA_W-1:0] core_res_y [4];
@@ -193,14 +199,14 @@ module nbody_control #(
 
         unique case (state)
             ST_LOAD_TILE_PRIME: begin
-                body_raddr = tile_base + PTR_W'(core_load_idx);
+                body_raddr = tile_base + PTR_W'(load_idx_count);
             end
 
             ST_LOAD_TILE: begin
-                if (core_load_idx == 4'd15) begin
-                    body_raddr = tile_base + PTR_W'(core_load_idx);
+                if (load_idx_count == 4'd15) begin
+                    body_raddr = tile_base + PTR_W'(load_idx_count);
                 end else begin
-                    body_raddr = tile_base + PTR_W'(core_load_idx) + PTR_W'(1);
+                    body_raddr = tile_base + PTR_W'(load_idx_count) + PTR_W'(1);
                 end
             end
 
@@ -209,10 +215,11 @@ module nbody_control #(
             end
 
             ST_COMPUTE_GROUP: begin
-                if (is_last_active_body(j_body_idx, active_count)) begin
-                    body_raddr = j_body_idx;
-                end else begin
+                if ((compute_grp == 2'd2) &&
+                    !is_last_active_body(j_body_idx, active_count)) begin
                     body_raddr = j_body_idx + 1'b1;
+                end else begin
+                    body_raddr = j_body_idx;
                 end
             end
 
@@ -291,6 +298,7 @@ module nbody_control #(
             run_initial_half_step <= 1'b0;
             tile_base             <= '0;
             j_body_idx            <= '0;
+            current_j_idx         <= '0;
             integrate_idx         <= '0;
             wait_count            <= '0;
             compute_grp           <= 2'd0;
@@ -298,6 +306,7 @@ module nbody_control #(
             core_clear_prev       <= 1'b0;
             core_load_en          <= 1'b0;
             core_compute_en       <= 1'b0;
+            load_idx_count        <= 4'd0;
             core_load_idx         <= 4'd0;
             core_load_x           <= '0;
             core_load_y           <= '0;
@@ -306,6 +315,9 @@ module nbody_control #(
             core_j_y              <= '0;
             core_j_m              <= '0;
             core_lane_mask        <= 4'hF;
+            current_j_x           <= '0;
+            current_j_y           <= '0;
+            current_j_m           <= '0;
             integrator_start      <= 1'b0;
             body_update_we        <= 1'b0;
             body_update_addr      <= '0;
@@ -331,9 +343,11 @@ module nbody_control #(
                     done <= 1'b0;
                     if (go) begin
                         tile_base             <= '0;
+                        load_idx_count        <= 4'd0;
                         core_load_idx         <= 4'd0;
                         compute_grp           <= 2'd0;
                         j_body_idx            <= '0;
+                        current_j_idx         <= '0;
                         integrate_idx         <= '0;
                         timestep_count        <= 32'd0;
                         run_initial_half_step <= first_step;
@@ -351,8 +365,9 @@ module nbody_control #(
 
                 ST_LOAD_TILE: begin
                     core_load_en  <= 1'b1;
+                    core_load_idx <= load_idx_count;
 
-                    if (ptr_to_active(tile_base) + load_idx_to_active(core_load_idx) < active_count) begin
+                    if (ptr_to_active(tile_base) + load_idx_to_active(load_idx_count) < active_count) begin
                         core_load_x <= body_x;
                         core_load_y <= body_y;
                     end else begin
@@ -360,49 +375,64 @@ module nbody_control #(
                         core_load_y <= '0;
                     end
 
-                    if (core_load_idx == 4'd15) begin
-                        core_load_idx   <= 4'd0;
+                    if (load_idx_count == 4'd15) begin
+                        load_idx_count  <= 4'd0;
                         compute_grp     <= 2'd0;
                         j_body_idx      <= '0;
-                        core_clear_prev <= 1'b1;
                         state           <= ST_CLEAR_GROUP;
                     end else begin
-                        core_load_idx <= core_load_idx + 1'b1;
+                        load_idx_count <= load_idx_count + 1'b1;
                     end
                 end
 
                 ST_CLEAR_GROUP: begin
                     core_clear_prev <= 1'b1;
-                    core_grp_sel    <= compute_grp;
+                    core_grp_sel    <= 2'd0;
                     j_body_idx      <= '0;
+                    current_j_idx   <= '0;
                     wait_count      <= '0;
                     state           <= ST_COMPUTE_PRIME;
                 end
 
                 ST_COMPUTE_PRIME: begin
+                    current_j_x   <= body_x;
+                    current_j_y   <= body_y;
+                    current_j_m   <= body_m;
+                    current_j_idx <= j_body_idx;
+                    compute_grp   <= 2'd0;
                     state <= ST_COMPUTE_GROUP;
                 end
 
                 ST_COMPUTE_GROUP: begin
                     core_compute_en <= 1'b1;
                     core_grp_sel    <= compute_grp;
-                    core_j_x        <= body_x;
-                    core_j_y        <= body_y;
-                    core_j_m        <= body_m;
-                    core_lane_mask  <= make_lane_mask(tile_base, compute_grp, j_body_idx, active_count);
+                    core_j_x        <= current_j_x;
+                    core_j_y        <= current_j_y;
+                    core_j_m        <= current_j_m;
+                    core_lane_mask  <= make_lane_mask(tile_base, compute_grp, current_j_idx, active_count);
 
-                    if (is_last_active_body(j_body_idx, active_count)) begin
-                        wait_count <= '0;
-                        state      <= ST_DRAIN_GROUP;
+                    if (compute_grp == 2'd3) begin
+                        if (is_last_active_body(j_body_idx, active_count)) begin
+                            wait_count <= '0;
+                            state      <= ST_DRAIN_GROUP;
+                        end else begin
+                            j_body_idx    <= j_body_idx + 1'b1;
+                            current_j_idx <= j_body_idx + 1'b1;
+                            current_j_x   <= body_x;
+                            current_j_y   <= body_y;
+                            current_j_m   <= body_m;
+                            compute_grp   <= 2'd0;
+                        end
                     end else begin
-                        j_body_idx <= j_body_idx + 1'b1;
+                        compute_grp <= compute_grp + 1'b1;
                     end
                 end
 
                 ST_DRAIN_GROUP: begin
-                    core_grp_sel <= compute_grp;
+                    core_grp_sel <= 2'd0;
 
                     if (wait_count == WAIT_W'(PIPE_LAT + 1)) begin
+                        compute_grp <= 2'd0;
                         store_lane <= 2'd0;
                         state      <= ST_STORE_GROUP;
                     end else begin
@@ -432,7 +462,9 @@ module nbody_control #(
                         state <= ST_NEXT_TILE;
                     end else begin
                         compute_grp <= compute_grp + 1'b1;
-                        state       <= ST_CLEAR_GROUP;
+                        core_grp_sel <= compute_grp + 1'b1;
+                        store_lane  <= 2'd0;
+                        state       <= ST_STORE_GROUP;
                     end
                 end
 
@@ -442,8 +474,11 @@ module nbody_control #(
                         state         <= ST_INTEGRATE_PRIME;
                     end else begin
                         tile_base     <= tile_base + TILE_STRIDE;
+                        load_idx_count <= 4'd0;
                         core_load_idx <= 4'd0;
                         compute_grp   <= 2'd0;
+                        j_body_idx    <= '0;
+                        current_j_idx <= '0;
                         state         <= ST_LOAD_TILE_PRIME;
                     end
                 end
@@ -490,9 +525,11 @@ module nbody_control #(
 
                         UPD_NEXT_STEP: begin
                             tile_base     <= '0;
+                            load_idx_count <= 4'd0;
                             core_load_idx <= 4'd0;
                             compute_grp   <= 2'd0;
                             j_body_idx    <= '0;
+                            current_j_idx <= '0;
                             integrate_idx <= '0;
                             state         <= ST_LOAD_TILE_PRIME;
                         end

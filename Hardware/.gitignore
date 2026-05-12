@@ -51,9 +51,6 @@ inter.vpd
 novas.*
 verdi_config_file
 
-# Simulation output
-tb/output/
-
 # Parent-level accidental sim dir
 ../simv.daidir/
 
