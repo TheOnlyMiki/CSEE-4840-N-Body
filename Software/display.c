@@ -16,23 +16,29 @@ static uint8_t body_masks[NUM_BODY_RADII][9][9];
 
 static const int BODY_RADII[NUM_BODY_RADII] = { 1, 2, 3, 4 };
 
-/*
- * Packed display format from vga_bitmap_avmm.sv:
- * word = y * 20 + x / 32, bit = x % 32, one LSB-first bit per pixel.
- */
+// Set a specific pixel is on or off (1/0)
 static inline void set_pixel(int x, int y, int on)
 {
+    // Check if the coordinates are out of bounds
     if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT)
         return;
 
-    if (on)
+    /*
+    Packed display format
+    frame index = y * 20 + x / 32, bit = x & 31 (x % 32)
+    one LSB-first bit per pixel
+    */
+    if (on) {
         framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] |= (1u << (x & 31));
-    else
+    } else {
         framebuffer[y * DISPLAY_WORDS_PER_ROW + x / 32] &= ~(1u << (x & 31));
+    }
 }
 
+// Returning the 5-bit character set of a given character in a given line
 static uint8_t glyph_row(char c, int row)
 {
+    // Each character consists of 7 rows, with each row represented by 5 bits
     static const uint8_t blank[7] = { 0, 0, 0, 0, 0, 0, 0 };
     static const uint8_t glyphs[][7] = {
         ['0'] = { 0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e },
@@ -81,42 +87,52 @@ static uint8_t glyph_row(char c, int row)
     };
     const uint8_t *g;
 
+    // Converts lowercase letters to uppercase
     if (c >= 'a' && c <= 'z')
         c = (char)toupper((unsigned char)c);
 
-    if ((unsigned char)c >= sizeof(glyphs) / sizeof(glyphs[0]))
+    // If the character is not supported, display a blank space
+    if ((unsigned char) c >= sizeof(glyphs) / sizeof(glyphs[0])) {
         g = blank;
-    else
-        g = glyphs[(unsigned char)c];
+    } else {
+        g = glyphs[(unsigned char) c];
+    }
 
     return g[row];
 }
 
+// Convert the simulation's world coordinates into screen pixel coordinates
 int world_to_screen_x(float x)
 {
     float normalized = (x - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-
-    return (int)(normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
+    return (int) (normalized * (float)(BODY_DISPLAY_W - 1) + 0.5f);
 }
 
+// Convert the simulation's world coordinates into screen pixel coordinates
 int world_to_screen_y(float y)
 {
     float normalized = (y - NBODY_POS_MIN) / (NBODY_POS_MAX - NBODY_POS_MIN);
-
-    return (int)(normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
+    return (int) (normalized * (float)(BODY_DISPLAY_H - 1) + 0.5f);
 }
 
+// Clear the entire framebuffer to 0, resulting in a black screen
 void display_clear(void)
 {
     memset(framebuffer, 0, sizeof(framebuffer));
 }
 
+/*
+The rendering thread needs to draw numerous bodies in every frame
+Recalculating the circular geometry each time a body is drawn is time-consuming
+Instead, pre-generate the masks beforehand
+then simply perform a direct lookup when rendering
+*/
 void display_init_bodyshape(void)
 {
     memset(body_masks, 0, sizeof(body_masks));
+
     for (int i = 0; i < NUM_BODY_RADII; i++) {
         int r = BODY_RADII[i];
-
         for (int y = -r; y <= r; y++)
             for (int x = -r; x <= r; x++)
                 if (x * x + y * y < r * r + r)
@@ -124,11 +140,14 @@ void display_init_bodyshape(void)
     }
 }
 
+// Draw a body at position (cx, cy)
 void display_draw_body(int cx, int cy, int radius_idx)
 {
     int r = BODY_RADII[radius_idx];
     for (int y = -r; y <= r; y++) {
         int sy = cy + y;
+
+        // Check if the coordinates are out of bounds
         if (sy < 0 || sy >= BODY_DISPLAY_H)
             continue;
         for (int x = -r; x <= r; x++)
@@ -137,11 +156,14 @@ void display_draw_body(int cx, int cy, int radius_idx)
     }
 }
 
+// Draw a character at a specific row and column within a text grid
 void display_putchar(char c, int row, int col)
 {
+    // Check if the coordinates are out of bounds
     if (row < 0 || row >= TEXT_ROWS || col < 0 || col >= TEXT_COLS)
         return;
 
+    // Render 5 x 7 character to 8 × 16 pixels
     for (int y = 0; y < FONT_HEIGHT; y++) {
         uint8_t bits = 0;
 
@@ -155,12 +177,16 @@ void display_putchar(char c, int row, int col)
     }
 }
 
+// Draw Strings Continuously
 void display_puts(const char *s, int row, int col)
 {
-    while (*s && col < TEXT_COLS)
+    while (*s && col < TEXT_COLS) {
         display_putchar(*s++, row, col++);
+    }
 }
 
+// Send the software framebuffer to the kernel driver
+// If /dev/nbody_display is not open, return -1
 int display_present(void)
 {
     if (display_fd < 0)
@@ -168,21 +194,27 @@ int display_present(void)
     return ioctl(display_fd, DISPLAY_WRITE_FRAME, framebuffer);
 }
 
+// Display Thread
 void *display_thread(void *arg)
 {
-    body_pos_t *render_positions = malloc(MAX_BODIES * sizeof(*render_positions));
+    // It is merely there to avoid a compiler warning
+    (void) arg;
 
-    (void)arg;
+    // Allocate a temporary array to store the positions of the current frame
+    body_pos_t *render_positions = malloc(MAX_BODIES * sizeof(*render_positions));
     if (!render_positions)
         return NULL;
 
+    // Open display device
     display_fd = open("/dev/nbody_display", O_RDWR);
     if (display_fd < 0)
         perror("open /dev/nbody_display");
 
+    // Initialize circular mask for the body
     display_init_bodyshape();
 
     while (running) {
+        // Copy a local variables from the global variables
         pthread_mutex_lock(&state_mutex);
         int local_num = num_bodies;
         int local_gap = current_gap;
@@ -190,43 +222,51 @@ void *display_thread(void *arg)
         int local_view = view_idx;
         int local_paused = is_paused;
 
-        char line1[TEXT_COLS + 1];
-
+        // Select the current frame to be displayed from history frames
         if (local_count > 0) {
             int slot = (local_count < MAX_HISTORY) ? local_view : (h_head + local_view) & (MAX_HISTORY - 1);
-        
             memcpy(render_positions, history[slot], local_num * sizeof(*render_positions));
         }
         pthread_mutex_unlock(&state_mutex);
 
+        // Clear the display framebuffer
         display_clear();
+
+        // If historical frames exist
         if (local_count > 0) {
             for (int i = 0; i < local_num; i++) {
+                // Retrieve world x/y coordinates and convert to screen x/y coordinates
                 int x = world_to_screen_x(render_positions[i].x);
                 int y = world_to_screen_y(render_positions[i].y);
                 display_draw_body(x, y, (int)static_masses[i]);
             }
         }
 
+        // Display the UI in last two rows in screen/VGA
+        char line1[TEXT_COLS + 1];
         snprintf(line1, sizeof(line1), "Bodies: %4d/%d | Gap: %2d/%d | Frame: %d/%d | Status: %s",
                  local_num, MAX_BODIES, local_gap, NBODY_GAP_MAX, local_view + 1, local_count,
                  local_paused ? "PAUSED" : "RUNNING");
         display_puts(line1, UI_START_ROW, 0);
-        display_puts("[SPACE] Play/Pause | [W/S] Gap | [A/D] Frame | [R] Reset | [Q] Quit",
+        display_puts("[SPACE] Play/Pause | [W/S] Gap | [A/D] Frame | [R] Reset | [Q] Exit",
                      UI_START_ROW + 1, 0);
+        
+        // Write the entire framebuffer to the display hardware
         display_present();
+
+        // It sleeps for 33.333 ms, the display thread is running at approximately 30 fps
         usleep(33333);
     }
 
+    // Clear the screen once before exiting and close the display device
     if (display_fd >= 0) {
         display_clear();
         display_present();
+        close(display_fd);
+        display_fd = -1;
     }
 
-    if (display_fd >= 0)
-        close(display_fd);
-    display_fd = -1;
-
+    // Release temporary array
     free(render_positions);
 
     return NULL;

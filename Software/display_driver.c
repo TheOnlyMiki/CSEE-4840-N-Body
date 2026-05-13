@@ -29,6 +29,13 @@ struct display_dev {
 
 static struct display_dev dev;
 
+/*
+ * Main ioctl dispatch function for /dev/nbody_display.
+ *
+ * DISPLAY_WRITE_FRAME copies a full packed framebuffer from userspace and
+ * writes it into the hardware framebuffer. DISPLAY_CLEAR clears every hardware
+ * framebuffer word to zero.
+ */
 static long display_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
     uint32_t i;
@@ -69,6 +76,13 @@ static struct miscdevice display_misc_device = {
     .fops = &display_fops,
 };
 
+/*
+ * Platform driver probe function.
+ *
+ * This function is called when the matching display device-tree node is found.
+ * It maps the Avalon-MM framebuffer, allocates a kernel-side frame buffer, and
+ * registers /dev/nbody_display as a misc device.
+ */
 static int display_probe(struct platform_device *pdev)
 {
     int ret;
@@ -108,6 +122,12 @@ out_release:
     return ret;
 }
 
+/*
+ * Platform driver remove function.
+ *
+ * Release /dev/nbody_display, free the kernel frame buffer, unmap the hardware
+ * framebuffer, and release the memory region.
+ */
 static int display_remove(struct platform_device *pdev)
 {
     misc_deregister(&display_misc_device);

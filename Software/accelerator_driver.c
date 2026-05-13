@@ -45,6 +45,13 @@ struct nbody_dev {
 
 static struct nbody_dev dev;
 
+/*
+ * Convert a userspace IEEE-754 single-precision float into the accelerator's
+ * custom S1E8M18 27-bit floating-point format.
+ *
+ * The converted value is stored in the lower 27 bits of a 32-bit Avalon word.
+ * The upper 5 bits are unused padding.
+ */
 static uint32_t f32_to_f27_bits(const float *value)
 {
     uint32_t bits;
@@ -80,6 +87,10 @@ static uint32_t f32_to_f27_bits(const float *value)
            (rounded_mant & NBODY_F27_MANT_MASK);
 }
 
+/*
+ * Convert a raw 27-bit S1E8M18 hardware result back into an IEEE-754
+ * single-precision float for userspace.
+ */
 static void f27_bits_to_f32(uint32_t raw, float *value)
 {
     uint32_t bits;
@@ -105,6 +116,13 @@ static void f27_bits_to_f32(uint32_t raw, float *value)
     memcpy(value, &bits, sizeof(bits));
 }
 
+/*
+ * Copy the initial particle array from userspace, convert each field from
+ * float32 to S1E8M18, and stream the data into the hardware input registers.
+ *
+ * The hardware commits one complete body when VY_IN is written, so the fields
+ * must be written in the expected X, Y, mass, VX, VY order.
+ */
 static int nbody_write_bodies(unsigned long arg)
 {
     nbody_bodies_arg_t barg;
@@ -144,6 +162,13 @@ static int nbody_write_bodies(unsigned long arg)
     return 0;
 }
 
+/*
+ * Read computed body positions from the accelerator output registers.
+ *
+ * Writing READ=1 prepares the hardware output stream. For each body, OUT_X is
+ * read first and OUT_Y is read second. The hardware output pointer advances
+ * only after OUT_Y is read.
+ */
 static int nbody_read_results(unsigned long arg)
 {
     nbody_read_arg_t rarg;
@@ -182,6 +207,13 @@ static int nbody_read_results(unsigned long arg)
     return ret;
 }
 
+/*
+ * Main ioctl dispatch function for /dev/nbody.
+ *
+ * Each command corresponds to one userspace accelerator operation, such as
+ * writing configuration, loading input bodies, starting a run, checking DONE,
+ * reading output positions, or clearing the hardware read state.
+ */
 static long nbody_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
     nbody_config_t cfg;
@@ -249,6 +281,13 @@ static struct miscdevice nbody_misc_device = {
     .fops = &nbody_fops,
 };
 
+/*
+ * Platform driver probe function.
+ *
+ * This function is called when the matching device-tree node is found. It maps
+ * the accelerator register space, registers /dev/nbody as a misc device, and
+ * initializes basic hardware control registers.
+ */
 static int nbody_probe(struct platform_device *pdev)
 {
     int ret;
@@ -282,6 +321,12 @@ out_release:
     return ret;
 }
 
+/*
+ * Platform driver remove function.
+ *
+ * Release the misc device, unmap the hardware register space, and free the
+ * reserved memory region.
+ */
 static int nbody_remove(struct platform_device *pdev)
 {
     misc_deregister(&nbody_misc_device);
