@@ -67,6 +67,9 @@ __MACOSX/
 # Simulator work libraries
 /work/
 
+# Platform Designer / Qsys local UI state
+/.qsys_edit/
+
 # Local Lab 3 reference copy
 /lab3-hw/
 

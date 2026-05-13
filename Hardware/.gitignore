@@ -43,6 +43,7 @@
 csrc/
 /sim/
 simv
+simv_*
 simv.daidir/
 *.daidir/
 ucli.key
