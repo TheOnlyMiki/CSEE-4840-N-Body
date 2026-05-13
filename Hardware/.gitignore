@@ -6,6 +6,9 @@
 /hps_isw_handoff/
 
 # Quartus generated project/build output
+/*.qsf
+/*.sdc
+/*.txt
 /soc_system.qpf
 /db/
 /incremental_db/
