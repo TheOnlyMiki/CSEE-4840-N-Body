@@ -1,15 +1,4 @@
 /**************************************************************************
- * Following floating point written by Mark Eiding mje56                  *
- * ECE 5760                                                               *
- * Modified IEEE single precision FP                                      *
- * bit 26:      Sign     (0: pos, 1: neg)                                 *
- * bits[25:18]: Exponent (unsigned)                                       *
- * bits[17:0]:  Fraction (unsigned)                                       *
- *  (-1)^SIGN * 2^(EXP-127) * (1+.FRAC)                                   *
- * (http://en.wikipedia.org/wiki/Single-precision_floating-point_format)  *
- * Adapted from Skyler Schneider ss868                                    *
- *************************************************************************/
-/**************************************************************************
  * Floating Point Fast Inverse Square Root                                *
  * 5-stage pipeline                                                       *
  * http://en.wikipedia.org/wiki/Fast_inverse_square_root                  *

@@ -7,9 +7,7 @@
 //   y'  = y  + vy'
 //
 // The control unit supplies ax/ay as either a half-step or full-step
-// acceleration increment for leapfrog integration.
-//
-// All numeric inputs and outputs use the 27-bit S1E8M18 core format.
+// acceleration increment for leapfrog integration
 
 module nbody_integrator #(
     parameter int DATA_W = 27

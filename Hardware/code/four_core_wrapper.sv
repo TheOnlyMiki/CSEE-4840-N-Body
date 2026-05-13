@@ -4,45 +4,27 @@ module four_core_wrapper #(
     input  logic        i_clk,
     input  logic        i_rst,   // active-low synchronous reset
 
-    // ============================================================
-    // external phase control (no internal state machine here)
-    // load / compute / readout are assumed to be externally scheduled
-    // and mutually well-behaved.
-    // ============================================================
+    // external phase control
     input  logic        i_clear_prev,
     input  logic        i_load_en,
     input  logic        i_compute_en,
 
-    // ============================================================
     // load 16 i-bodies into local wrapper memory
-    // note: while loading a new tile, wrapper cached outputs / feedback
-    // are cleared so stale results do not leak across tiles.
-    // ============================================================
     input  logic [3:0]  i_load_idx,
     input  logic [DATA_W-1:0] i_load_x,
     input  logic [DATA_W-1:0] i_load_y,
 
-    // ============================================================
-    // single external group select
-    // - combinationally selects which 4 i-bodies feed the datapath
-    // - combinationally selects which cached 4-lane result group is read out
-    // - when i_compute_en=1, it is sampled at this clock edge as the c0 group,
-    //   then delayed internally to c17 for out_mem writeback address.
-    // ============================================================
+    // external group select: combinationally selects which 4 i-bodies feed the datapath
+    // or which cached 4-lane result group is read out
     input  logic [1:0]  i_grp_sel,
 
-    // ============================================================
-    // shared j input for current compute issue
-    // ============================================================
+    // broadcasted j input
     input  logic [DATA_W-1:0] i_j_x,
     input  logic [DATA_W-1:0] i_j_y,
     input  logic [DATA_W-1:0] i_j_m,
     input  logic [3:0]  i_lane_mask,
 
-    // ============================================================
     // accumulated outputs
-    // always come from internal out_mem, never directly from datapath
-    // ============================================================
     output logic [DATA_W-1:0] o_res0_x,
     output logic [DATA_W-1:0] o_res0_y,
     output logic [DATA_W-1:0] o_res1_x,
@@ -52,45 +34,33 @@ module four_core_wrapper #(
     output logic [DATA_W-1:0] o_res3_x,
     output logic [DATA_W-1:0] o_res3_y,
 
-    // selected group's cache has been written at least once since last clear/load.
-    // this is NOT a "final all-j done" flag; final completion is still scheduled externally.
+    // selected group results valid
     output logic        o_res_vld
 );
 
     localparam int PIPE_LAT = 18;
     integer i;
 
-    // ============================================================
     // local i-body memory (16 entries)
-    // ============================================================
     logic [DATA_W-1:0] i_x_mem [16];
     logic [DATA_W-1:0] i_y_mem [16];
 
-    // ============================================================
     // internal cached accumulated outputs (real wrapper outputs)
-    // ============================================================
     logic [DATA_W-1:0] acc_x_bank [16];
     logic [DATA_W-1:0] acc_y_bank [16];
     logic [3:0]  grp_written;
 
-    // ============================================================
     // fixed feedback chain (no per-group selection here)
-    // ============================================================
     logic [DATA_W-1:0] prev0_x_d0, prev0_x_d1, prev0_y_d0, prev0_y_d1;
     logic [DATA_W-1:0] prev1_x_d0, prev1_x_d1, prev1_y_d0, prev1_y_d1;
     logic [DATA_W-1:0] prev2_x_d0, prev2_x_d1, prev2_y_d0, prev2_y_d1;
     logic [DATA_W-1:0] prev3_x_d0, prev3_x_d1, prev3_y_d0, prev3_y_d1;
 
-    // ============================================================
-    // c0->c17 metadata pipe for writeback address alignment
-    // the sampling point is the same posedge that launches datapath c0.
-    // ============================================================
+    // c0->c17 pipelined delay for writeback address alignment
     logic       vld_pipe [PIPE_LAT];
     logic [1:0] grp_pipe [PIPE_LAT];
 
-    // ============================================================
     // current group selection for datapath/readout
-    // ============================================================
     logic [3:0] grp_base;
     logic [3:0] wb_base;
 
@@ -126,9 +96,7 @@ module four_core_wrapper #(
     assign j2_m_eff = i_lane_mask[2] ? '0 : i_j_m;
     assign j3_m_eff = i_lane_mask[3] ? '0 : i_j_m;
 
-    // ============================================================
-    // datapath instances
-    // ============================================================
+    // outputs of datapath instances
     logic [DATA_W-1:0] dp_out0_x, dp_out0_y;
     logic [DATA_W-1:0] dp_out1_x, dp_out1_y;
     logic [DATA_W-1:0] dp_out2_x, dp_out2_y;
@@ -190,9 +158,7 @@ module four_core_wrapper #(
         end
     endtask
 
-    // ============================================================
     // sequential state updates
-    // ============================================================
     always_ff @(posedge i_clk) begin
         if (!i_rst) begin
             for (i = 0; i < 16; i = i + 1) begin
@@ -227,7 +193,7 @@ module four_core_wrapper #(
                 grp_pipe[i+1] <= grp_pipe[i];
             end
 
-            // c17-aligned out_mem writeback; this is the real wrapper result storage
+            // c17-aligned out_mem writeback (wrapper result storage)
             if (vld_pipe[PIPE_LAT-1]) begin
                 acc_x_bank[wb_base + 4'd0] <= dp_out0_x;
                 acc_y_bank[wb_base + 4'd0] <= dp_out0_y;
@@ -242,9 +208,7 @@ module four_core_wrapper #(
         end
     end
 
-    // ============================================================
     // real output is always selected from out_mem, using the same single grp_sel
-    // ============================================================
     assign o_res0_x = acc_x_bank[grp_base + 4'd0];
     assign o_res0_y = acc_y_bank[grp_base + 4'd0];
     assign o_res1_x = acc_x_bank[grp_base + 4'd1];

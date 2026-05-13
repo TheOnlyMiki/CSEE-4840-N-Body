@@ -7,7 +7,7 @@
  *
  * Register map, 32-bit word addresses:
  *   0..9599  framebuffer words, write-only from software
- *   all reads return 0
+ *   all reads from software return 0
  *
  * Bitmap packing:
  *   WIDTH = 640, HEIGHT = 480, WORDS_PER_ROW = 20, FB_WORDS = 9600
@@ -16,10 +16,6 @@
  *   frame[y * 20 + x / 32][x % 32] = pixel(x, y)
  *
  * Pixel value 0 displays black. Pixel value 1 displays white.
- *
- * This bit order matches the existing display driver draft in Software/,
- * which packs pixels with (1u << (x % 32)). It is LSB-first within each
- * 32-bit word, unlike the earlier MSB-first proposal.
  */
 
 module vga_bitmap_avmm (
@@ -72,10 +68,8 @@ module vga_bitmap_avmm (
     assign av_addr_valid = (address <= FB_LAST_WORD);
     assign av_ram_addr   = av_addr_valid ? address : 14'd0;
 
-    /*
-     * Reuse the Lab 3 VGA timing generator from vga_ball.sv. hcount[10:1]
-     * is the 640-pixel column and vcount is the 480-pixel row.
-     */
+    // Reuse the Lab 3 VGA timing generator from vga_ball.sv.
+    // hcount[10:1] is the 640-pixel column and vcount is the 480-pixel row.
     vga_counters counters (
         .clk50      (clk),
         .reset      (reset),

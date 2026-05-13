@@ -1,3 +1,7 @@
+/**************************************************************************
+ * Floating Point Multiplier                                              *
+ * Fully Combinational                                                    *
+ *************************************************************************/
 module FpMul (
     input  logic [26:0] iA,    // First input
     input  logic [26:0] iB,    // Second input

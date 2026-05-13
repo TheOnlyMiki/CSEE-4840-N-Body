@@ -113,7 +113,7 @@ module FpAdd (
     logic [7:0] oSum_e;
     assign oSum_e = buf_larger_exp - shft_amt + 8'd1;
 
-    // Detect underflow. If top bit of mantissa is not set, then denorm.
+    // Detect underflow. If top bit of mantissa is not set, then denormalize
     logic underflow;
     assign underflow = ~uflow_shift[53];
 

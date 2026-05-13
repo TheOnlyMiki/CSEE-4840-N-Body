@@ -1,14 +1,5 @@
 //==============================================================================
-// two_body_core (late-prev version, FIXED)
-//
-// Goal of this version:
-//   - b1/b2/m2 launch at c0
-//   - datapath computes the pair term internally
-//   - previous acceleration is NOT delayed inside the core
-//   - external logic/TB supplies i_a_b1_x/y only when the pair term reaches
-//     the final add input point
-//   - because FpAdd is 2-stage, output appears exactly 2 cycles after prev
-//     is sampled
+// two_body_core
 //
 // Timing summary:
 //   c0      : capture b1/b2/m2 inputs
@@ -23,7 +14,7 @@
 //   c14->c15: term = dx*k, dy*k (mul comb + REG)
 //   c15->c17: out = prev + term_reg (FpAdd = 2)
 //
-// So: prev must be driven from outside for the c15 sampling edge.
+// prev must be driven from outside for the c15 sampling edge.
 //==============================================================================
 
 module two_body_core #(
@@ -39,24 +30,19 @@ module two_body_core #(
     input  logic [DATA_W-1:0] i_b2_y,
     input  logic [DATA_W-1:0] i_m_b2,
 
-    // 27-bit previous accel in core format (S1E8M18)
-    // LATE INPUT: sample this only when term reaches final add point.
+    // 27-bit previous accel
     input  logic [DATA_W-1:0] i_a_b1_x,
     input  logic [DATA_W-1:0] i_a_b1_y,
 
-    // 27-bit output accel in core format (S1E8M18)
+    // 27-bit output accel
     output logic [DATA_W-1:0] o_a_b1_x,
     output logic [DATA_W-1:0] o_a_b1_y
 );
 
-    //--------------------------------------------------------------------------
-    // eps^2 in core format (S1E8M18)
-    //--------------------------------------------------------------------------
+    // eps^2 = 0.25
     localparam logic [26:0] EPSILON_SQUARE = {1'b0, 8'd125, 18'd0};
 
-    //--------------------------------------------------------------------------
-    // Body inputs already use the 27-bit S1E8M18 core format.
-    //--------------------------------------------------------------------------
+    // Body inputs
     logic [26:0] b1_x_27;
     logic [26:0] b1_y_27;
     logic [26:0] b2_x_27;
@@ -69,9 +55,7 @@ module two_body_core #(
     assign b2_y_27 = i_b2_y;
     assign m2_27   = i_m_b2;
 
-    //--------------------------------------------------------------------------
     // c0: register core-format inputs
-    //--------------------------------------------------------------------------
     logic [26:0] r_b1_x_c0;
     logic [26:0] r_b1_y_c0;
     logic [26:0] r_b2_x_c0;
@@ -94,9 +78,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
     // Reset-mux for fplib blocks (they have no reset)
-    //--------------------------------------------------------------------------
     logic en;
     logic [26:0] b2x_in;
     logic [26:0] b2y_in;
@@ -105,9 +87,7 @@ module two_body_core #(
     assign b2x_in = en ? r_b2_x_c0 : 27'd0;
     assign b2y_in = en ? r_b2_y_c0 : 27'd0;
 
-    //--------------------------------------------------------------------------
     // c0 comb: negate b1 so dx = x2 + (-x1), dy = y2 + (-y1)
-    //--------------------------------------------------------------------------
     logic [26:0] w_b1_x_neg;
     logic [26:0] w_b1_y_neg;
 
@@ -121,9 +101,7 @@ module two_body_core #(
         .oNegative(w_b1_y_neg)
     );
 
-    //--------------------------------------------------------------------------
-    // c0 -> c2: dx, dy (FpAdd = 2)
-    //--------------------------------------------------------------------------
+    // c0 -> c2: dx, dy (FpAdd = 2 cycles)
     logic [26:0] w_dx_c2;
     logic [26:0] w_dy_c2;
 
@@ -141,9 +119,7 @@ module two_body_core #(
         .oSum(w_dy_c2)
     );
 
-    //--------------------------------------------------------------------------
-    // c2 -> c3: dx2, dy2 (mul comb + reg = 1)
-    //--------------------------------------------------------------------------
+    // c2 -> c3: dx2, dy2 (mul comb + reg = 1 cycle)
     logic [26:0] w_dx2_comb;
     logic [26:0] w_dy2_comb;
     logic [26:0] r_dx2_c3;
@@ -171,9 +147,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
-    // c3 -> c5: r2 = dx2 + dy2 (FpAdd = 2)
-    //--------------------------------------------------------------------------
+    // c3 -> c5: r2 = dx2 + dy2 (FpAdd = 2 cycles)
     logic [26:0] w_r2_c5;
 
     FpAdd u_add_r2 (
@@ -183,9 +157,7 @@ module two_body_core #(
         .oSum(w_r2_c5)
     );
 
-    //--------------------------------------------------------------------------
-    // c5 -> c7: r2e = r2 + eps2 (FpAdd = 2)
-    //--------------------------------------------------------------------------
+    // c5 -> c7: r2e = r2 + eps2 (FpAdd = 2 cycles)
     logic [26:0] w_r2e_c7;
 
     FpAdd u_add_r2e (
@@ -195,9 +167,7 @@ module two_body_core #(
         .oSum(w_r2e_c7)
     );
 
-    //--------------------------------------------------------------------------
     // c7 -> c11: s_raw = inv_sqrt(r2e)
-    //--------------------------------------------------------------------------
     logic [26:0] w_s_c11;
 
     FpInvSqrt u_invsqrt (
@@ -206,9 +176,7 @@ module two_body_core #(
         .oInvSqrt(w_s_c11)
     );
 
-    //--------------------------------------------------------------------------
     // c11 -> c12: register s before mul usage
-    //--------------------------------------------------------------------------
     logic [26:0] r_s_c12;
 
     always_ff @(posedge i_clk) begin
@@ -219,9 +187,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
     // Align m2 to c12
-    //--------------------------------------------------------------------------
     logic [26:0] r_m2_pipe [12];
 
     always_ff @(posedge i_clk) begin
@@ -240,9 +206,7 @@ module two_body_core #(
     logic [26:0] m2_c12;
     assign m2_c12 = r_m2_pipe[11];
 
-    //--------------------------------------------------------------------------
     // c12 -> c13: s2 = s*s, t = m2*s
-    //--------------------------------------------------------------------------
     logic [26:0] w_s2_comb;
     logic [26:0] w_t_comb;
     logic [26:0] r_s2_c13;
@@ -270,9 +234,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
     // c13 -> c14: k = m2*s^3
-    //--------------------------------------------------------------------------
     logic [26:0] w_k_comb;
     logic [26:0] r_k_c14;
 
@@ -290,9 +252,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
     // Align dx/dy to c14
-    //--------------------------------------------------------------------------
     logic [26:0] r_dx_pipe [12];
     logic [26:0] r_dy_pipe [12];
 
@@ -318,10 +278,7 @@ module two_body_core #(
     assign dx_c14 = r_dx_pipe[11];
     assign dy_c14 = r_dy_pipe[11];
 
-    //--------------------------------------------------------------------------
     // c14 -> c15: pair term = dx*k, dy*k (mul comb + reg)
-    // FIX: insert the register BETWEEN term and final FpAdd.
-    //--------------------------------------------------------------------------
     logic [26:0] w_ax_term_c15;
     logic [26:0] w_ay_term_c15;
     logic [26:0] r_ax_term_c15;
@@ -349,10 +306,7 @@ module two_body_core #(
         end
     end
 
-    //--------------------------------------------------------------------------
-    // c15 -> c17: out = prev + term_reg (FpAdd = 2)
-    // prev is taken DIRECTLY from the external interface here.
-    //--------------------------------------------------------------------------
+    // c15 -> c17: out = prev + term_reg (FpAdd = 2 cycles)
     logic [26:0] w_out_x_c17;
     logic [26:0] w_out_y_c17;
 

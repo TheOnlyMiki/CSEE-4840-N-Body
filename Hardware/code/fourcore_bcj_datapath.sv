@@ -4,9 +4,7 @@ module fourcore_bcj_datapath #(
     input  logic        i_clk,
     input  logic        i_rst,
 
-    // ============================================================
-    // shared j position, per-lane j mass
-    // ============================================================
+    // broadcasted j position, per-lane j mass
     input  logic [DATA_W-1:0] i_j_x,
     input  logic [DATA_W-1:0] i_j_y,
     input  logic [DATA_W-1:0] i_j0_m,
@@ -14,9 +12,7 @@ module fourcore_bcj_datapath #(
     input  logic [DATA_W-1:0] i_j2_m,
     input  logic [DATA_W-1:0] i_j3_m,
 
-    // ============================================================
     // lane 0
-    // ============================================================
     input  logic [DATA_W-1:0] i_i0_x,
     input  logic [DATA_W-1:0] i_i0_y,
     input  logic [DATA_W-1:0] i_prev0_x,
@@ -24,9 +20,7 @@ module fourcore_bcj_datapath #(
     output logic [DATA_W-1:0] o_out0_x,
     output logic [DATA_W-1:0] o_out0_y,
 
-    // ============================================================
     // lane 1
-    // ============================================================
     input  logic [DATA_W-1:0] i_i1_x,
     input  logic [DATA_W-1:0] i_i1_y,
     input  logic [DATA_W-1:0] i_prev1_x,
@@ -34,9 +28,7 @@ module fourcore_bcj_datapath #(
     output logic [DATA_W-1:0] o_out1_x,
     output logic [DATA_W-1:0] o_out1_y,
 
-    // ============================================================
     // lane 2
-    // ============================================================
     input  logic [DATA_W-1:0] i_i2_x,
     input  logic [DATA_W-1:0] i_i2_y,
     input  logic [DATA_W-1:0] i_prev2_x,
@@ -44,9 +36,7 @@ module fourcore_bcj_datapath #(
     output logic [DATA_W-1:0] o_out2_x,
     output logic [DATA_W-1:0] o_out2_y,
 
-    // ============================================================
     // lane 3
-    // ============================================================
     input  logic [DATA_W-1:0] i_i3_x,
     input  logic [DATA_W-1:0] i_i3_y,
     input  logic [DATA_W-1:0] i_prev3_x,

@@ -289,6 +289,7 @@ module nbody_control #(
         .o_vy       (integrator_vy_out)
     );
 
+    // Main FSM
     always_ff @(posedge clk) begin
         if (reset) begin
             core_rst_n            <= 1'b0;

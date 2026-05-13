@@ -18,14 +18,7 @@
 //   0x0A OUT_X     R  Output X position for the current output body.
 //   0x0B OUT_Y     R  Output Y position for the current output body. Reading this
 //                  register increments the output pointer.
-// Data payloads use the low 27 bits of each 32-bit Avalon word.
-//
-// Output read sequence after DONE:
-//   read OUT_X, read OUT_Y, read OUT_X, read OUT_Y, ...
-//
-// Loading any body through VY_IN marks the next GO as the initial leapfrog
-// half-step run. Later GO writes run with normal full-step integration unless
-// software loads body data again.
+// Data uses the lower 27 bits of each 32-bit Avalon word.
 
 module nbody_accel_avmm #(
     parameter int MAX_BODIES = 1024

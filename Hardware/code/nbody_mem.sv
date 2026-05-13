@@ -14,8 +14,7 @@ module nbody_mem #(
     input  logic [DATA_W-1:0] cpu_vx,
     input  logic [DATA_W-1:0] cpu_vy,
 
-    // Shared synchronous body read port. Data is valid one clock after body_raddr
-    // is sampled.
+    // Shared synchronous body read port. Data is valid one clock after body_raddr is sampled.
     input  logic [PTR_W-1:0] body_raddr,
     output logic [DATA_W-1:0] body_x,
     output logic [DATA_W-1:0] body_y,
