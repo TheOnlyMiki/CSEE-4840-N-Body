@@ -26,7 +26,7 @@ N_FRAMES = 10
 DT = 0.1
 G0 = 10.0
 
-# IMPORTANT: this is epsilon^2 added to r^2 (matches typical RTL style)
+# IMPORTANT: this is epsilon^2 added to r^2, use very small value for closer-to-realistic accel (but not too small to cause underflow issues in fp64)
 EPS_SQ = 2.0 ** (-27)
 
 # Host update gain (this is where G0 goes)
@@ -215,5 +215,5 @@ def main():
     print("[OK] FP64 reference generated (chip-accel convention, K_HOST used).")
     print(f"     EPS_SQ={EPS_SQ}  DT={DT}  G0={G0}  K_HOST={K_HOST}")
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

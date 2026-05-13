@@ -1,4 +1,3 @@
-
 # ## 3. Python Model for FP modules
 
 # ### 3.1 FP27 Add
