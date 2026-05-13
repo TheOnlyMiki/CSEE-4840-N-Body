@@ -6,19 +6,11 @@
  *   - nbody_accel_avmm
  *   - vga_bitmap_avmm
  *
- * This does NOT prove accelerator math correctness yet. It only checks that
- * software can reach the expected Avalon address windows and exercise the
- * simplest control/read paths.
- *
  * Build on the board:
  *   gcc -O2 -Wall -Wextra -o avmm_smoke_test avmm_smoke_test.c
  *
  * Run as root / with permission to open /dev/mem:
  *   ./avmm_smoke_test <nbody_offset_hex> <vga_offset_hex>
- *
- * Example only; replace offsets with the addresses assigned in Platform Designer
- * relative to the HPS lightweight bridge:
- *   ./avmm_smoke_test 0x00000 0x01000
  */
 
 #include <errno.h>

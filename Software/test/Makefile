@@ -9,7 +9,7 @@
 #   make run NBODY_OFFSET=0x00000 VGA_OFFSET=0x01000
 #   make run-frame NBODY_OFFSET=0x00000 FRAME_INPUT=frame0_1024binit200_27bits.txt FRAME_OUTPUT=hw_xy_1024.txt
 #
-# Replace the offsets with your Platform Designer assigned offsets
+# Replace the offsets with Platform Designer assigned offsets
 # relative to the HPS lightweight bridge base 0xFF200000.
 
 CC      ?= cc
