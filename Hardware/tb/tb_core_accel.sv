@@ -4,10 +4,9 @@
 // TB: multi-body streaming scheduler driving a 2-body core
 // - Reads frame0 file:  idx px py vx vy m   (all hex, S1E8M18 for px/py/vx/vy/m)
 // - Streams all pairs (b1 accumulates contributions from every b2!=b1)
-// - Core interface (NEW):
+// - Core interface:
 //     inputs: 27-bit S1E8M18 (pos/mass), prev accel: 27-bit S1E8M18
 //     outputs: 27-bit S1E8M18
-// - TB truncates final 27-bit accum to 16-bit S1E8M7 for "chip output" file
 // - Core has fixed epsilon_square internally 
 
 module tb_core_accel;
@@ -16,44 +15,22 @@ module tb_core_accel;
   // User knobs
   // -----------------------------
   localparam int N_BODIES  = 1024;   // <-- set any N you want
-  localparam int PIPE_LAT  = 18;  // as per your datapath
-  parameter  int PREV_LAT  = 16;  // launch c0 -> prev sampled by final add
+  localparam int PIPE_LAT  = 18;
+  parameter  int PREV_LAT  = 16;
 
   localparam string INPUT_FILE = "tb/frame_input/frame0_1024binit200_27bits.txt";
-  localparam string OUT_FILE   = "tb/output/eps025_accel_1024binit200_27bits.txt";
-  // localparam string OUT_FILE_27bits   = "tb/output/eps025new_temp_27bits_1024binit200.txt";
+  localparam string OUT_FILE_27bits = "tb/output/eps025_accel_27bits_1024binit200.txt";
 
-  // -----------------------------
-  // DUT IO (NEW CORE INTERFACE)
-  //   pos/mass: 16-bit S1E8M7
-  //   prev accel in: 27-bit
-  //   accel out: 27-bit
-  // -----------------------------
   logic        i_clk;
-  logic        i_rst;  // active-low reset in your RTL: if(!i_rst) reset, else run
+  logic        i_rst;  // active-low reset
 
   logic [26:0] i_b1_x, i_b1_y;
   logic [26:0] i_b2_x, i_b2_y;
   logic [26:0] i_m_b2;
 
   wire  [26:0] i_a_b1_x, i_a_b1_y;       // 27-bit prev accel, late-aligned
-  wire  [26:0] o_a_b1_x_27, o_a_b1_y_27; // 27-bit DUT accel out
+  wire  [26:0] o_a_b1_x, o_a_b1_y;       // 27-bit DUT accel out
 
-  // Truncated "chip output" (16-bit) - TB performs truncation
-  wire [26:0] o_a_b1_x, o_a_b1_y;
-
-  // Truncation: keep sign/exp, take top 7 mant bits (of 18)
-  // Optional zero-detect (treat exact 0 as 0)
-  wire outx_zero = (o_a_b1_x_27[25:0] == 26'd0);
-  wire outy_zero = (o_a_b1_y_27[25:0] == 26'd0);
-  //assign o_a_b1_x = outx_zero ? 16'd0 : {o_a_b1_x_27[26], o_a_b1_x_27[25:18], o_a_b1_x_27[17:11]};
-  //assign o_a_b1_y = outy_zero ? 16'd0 : {o_a_b1_y_27[26], o_a_b1_y_27[25:18], o_a_b1_y_27[17:11]};
-  assign o_a_b1_x = o_a_b1_x_27;
-  assign o_a_b1_y = o_a_b1_y_27;
-
-  // -----------------------------
-  // DUT (eps fixed inside core; no i_eps2 port)
-  // -----------------------------
   two_body_core dut (
     .i_clk    (i_clk),
     .i_rst    (i_rst),
@@ -67,38 +44,27 @@ module tb_core_accel;
     .i_a_b1_x (i_a_b1_x),
     .i_a_b1_y (i_a_b1_y),
 
-    .o_a_b1_x (o_a_b1_x_27),
-    .o_a_b1_y (o_a_b1_y_27)
+    .o_a_b1_x (o_a_b1_x),
+    .o_a_b1_y (o_a_b1_y)
   );
 
-  // -----------------------------
   // Clock
-  // -----------------------------
   initial i_clk = 1'b0;
   always #5 i_clk = ~i_clk; // 100MHz
 
-  // -----------------------------
   // Frame storage
-  // -----------------------------
   logic [26:0] px [0:N_BODIES-1];
   logic [26:0] py [0:N_BODIES-1];
   logic [26:0] m  [0:N_BODIES-1];
 
-  // Output accel (chip view, 16-bit)
-  logic [26:0] ax [0:N_BODIES-1];
-  logic [26:0] ay [0:N_BODIES-1];
 
-  // -----------------------------
-  // Streaming control (TB-only)
-  // -----------------------------
+
+  // Streaming control
   logic in_valid;
   logic [PIPE_LAT-1:0] vsh;
   logic out_valid;
   assign out_valid = vsh[PIPE_LAT-1];
 
-  // two_body_core is the late-prev version: the previous accumulator is sampled
-  // at the final add input stage, not at c0 launch.  Keep the launch-time prev
-  // value in a sideband pipe and present it just before that final add samples.
   logic [26:0] launch_prev_x_27, launch_prev_y_27;
   logic [26:0] prev_x_pipe [0:PREV_LAT-1];
   logic [26:0] prev_y_pipe [0:PREV_LAT-1];
@@ -125,9 +91,7 @@ module tb_core_accel;
   assign i_a_b1_x = prev_x_pipe[PREV_LAT-1];
   assign i_a_b1_y = prev_y_pipe[PREV_LAT-1];
 
-  // -----------------------------
-  // Helpers
-  // -----------------------------
+  // Helper tasks for driving input and reading frame files
   task automatic drive_idle();
     begin
       i_b1_x   <= 27'h1FC0000;
@@ -143,6 +107,7 @@ module tb_core_accel;
     end
   endtask
 
+  // Helper task to drive one transaction (one pair of bodies, plus prev accel)
   task automatic drive_txn(
     input int b1,
     input int b2,
@@ -163,10 +128,8 @@ module tb_core_accel;
     end
   endtask
 
-  // -----------------------------
   // Read input frame file
   // line format: idx px py vx vy m (hex)
-  // -----------------------------
   task automatic read_frame_file(input string fname);
     int fd;
     string line;
@@ -203,9 +166,7 @@ module tb_core_accel;
     end
   endtask
 
-  // -----------------------------
   // Auto-alignment queue (tracks which txn produced each output)
-  // -----------------------------
   typedef struct packed {
     int b1;
     int b2;
@@ -213,11 +174,9 @@ module tb_core_accel;
 
   txn_t q[$];
 
-  // -----------------------------
   // Scheduling state
   // We keep per-b1 running accel in 27-bit (as the core output is "prev+term")
   // busy[b1] prevents issuing next (b1, b2) until previous output for b1 returns.
-  // -----------------------------
   logic [26:0] a_acc_x_27 [0:N_BODIES-1];
   logic [26:0] a_acc_y_27 [0:N_BODIES-1];
   logic        busy       [0:N_BODIES-1];
@@ -261,9 +220,6 @@ module tb_core_accel;
   integer b1;
   integer b2;
 
-  // -----------------------------
-  // Main
-  // -----------------------------
   initial begin
     drive_idle();
 
@@ -294,8 +250,8 @@ module tb_core_accel;
         t = q.pop_front();
 
         // core returns prev+term already, so we overwrite accumulator
-        a_acc_x_27[t.b1] = o_a_b1_x_27;
-        a_acc_y_27[t.b1] = o_a_b1_y_27;
+        a_acc_x_27[t.b1] = o_a_b1_x;
+        a_acc_y_27[t.b1] = o_a_b1_y;
 
         busy[t.b1] = 1'b0;
       end
@@ -321,37 +277,16 @@ module tb_core_accel;
       end
     end
 
-    // Final "chip output" is 16-bit => truncate here for file output
+    // write 27-bit accumulated output
+    fo = $fopen(OUT_FILE_27bits, "w");
+    if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE_27bits=%s", OUT_FILE_27bits);
+    $fwrite(fo, "# i ax27 ay27 (S1E8M18 hex)\n");
     for (b = 0; b < N_BODIES; b++) begin
-      // ax[b] = (a_acc_x_27[b][25:0] == 26'd0) ? 16'd0
-      //        : {a_acc_x_27[b][26], a_acc_x_27[b][25:18], a_acc_x_27[b][17:11]};
-      // ay[b] = (a_acc_y_27[b][25:0] == 26'd0) ? 16'd0
-      //        : {a_acc_y_27[b][26], a_acc_y_27[b][25:18], a_acc_y_27[b][17:11]};
-      ax[b] = a_acc_x_27[b];
-      ay[b] = a_acc_y_27[b];
-    end
-
-    // write 27-bit output
-    fo = $fopen(OUT_FILE, "w");
-    if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE=%s", OUT_FILE);
-
-    $fwrite(fo, "# i ax ay (S1E8M18 hex)\n");
-    for (b = 0; b < N_BODIES; b++) begin
-      $fwrite(fo, "%4d  %07h  %07h\n", b, ax[b], ay[b]);
+      $fwrite(fo, "%4d  %07h  %07h\n", b, a_acc_x_27[b], a_acc_y_27[b]);
     end
     $fclose(fo);
 
-    // write 27-bit accumulated output
-    // fo = $fopen(OUT_FILE_27bits, "w");
-    // if (fo == 0) $fatal(1, "ERROR: cannot open OUT_FILE_27bits=%s", OUT_FILE_27bits);
-    // $fwrite(fo, "# i ax27 ay27 (S1E8M18 hex)\n");
-    // for (b = 0; b < N_BODIES; b++) begin
-    //   $fwrite(fo, "%4d  %07h  %07h\n", b, a_acc_x_27[b], a_acc_y_27[b]);
-    // end
-    // $fclose(fo);
-
-    $display("DONE. Wrote %s", OUT_FILE);
-    //$display("DONE. Wrote %s", OUT_FILE_27bits);
+    $display("DONE. Wrote %s", OUT_FILE_27bits);
     $finish;
   end
 

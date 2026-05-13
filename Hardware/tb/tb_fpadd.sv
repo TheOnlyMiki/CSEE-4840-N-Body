@@ -21,17 +21,11 @@ module tb_fpadd;
         .oSum(oSum)
     );
 
-    // --------------------------------------------------------
-    // clock
-    // --------------------------------------------------------
     initial begin
         iCLK = 0;
         forever #5 iCLK = ~iCLK;
     end
 
-    // --------------------------------------------------------
-    // main
-    // --------------------------------------------------------
     initial begin
         iA = 0;
         iB = 0;
@@ -46,16 +40,13 @@ module tb_fpadd;
             $finish;
         end
 
-        // 等一小下，避免一开始时钟边沿和输入冲突
         @(negedge iCLK);
 
         while (!$feof(fd_in)) begin
             ret = $fscanf(fd_in, "%h %h %h\n", iA, iB, exp_out);
 
             if (ret == 3) begin
-                // FpAdd 是两拍流水
-                // 第1个posedge：buf_pre_sum等寄存
-                // 第2个posedge：oSum寄存输出
+                // FpAdd is two-stage pipelined, wait 2 cycles for output to settle
                 @(posedge iCLK);
                 @(posedge iCLK);
                 #1;
@@ -69,13 +60,13 @@ module tb_fpadd;
                     fail_cnt = fail_cnt + 1;
                     $display("[%0d] a=%07h b=%07h rtl=%07h py=%07h FAIL",
                              case_idx, iA, iB, oSum, exp_out);
-                    // 想看到第一条 fail 就停的话，把下一行放开
+                    // Uncomment below to stop on the first failure
                     // $stop;
                 end
 
                 case_idx = case_idx + 1;
 
-                // 给下一组一个干净的negedge装载输入
+                // Load next input group with a clean negedge clock edge
                 @(negedge iCLK);
             end
             else begin

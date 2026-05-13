@@ -8,7 +8,7 @@
 //   - for each j body, hold j stable while groups 0,1,2,3 are issued
 //   - after the pipeline drains, sample all 16 accumulated lane outputs
 //
-// Output format intentionally matches tb_core_accel.sv:
+// Output format:
 //   # i ax ay (S1E8M18 hex)
 
 module tb_four_core_wrapper;

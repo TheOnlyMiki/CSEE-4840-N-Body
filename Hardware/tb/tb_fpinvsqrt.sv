@@ -14,30 +14,19 @@ module tb_fpinvsqrt;
     integer fail_cnt;
     integer k;
 
-    // conservative wait; if your RTL is deeper, bump this up
     localparam integer SETTLE_CYCLES = 8;
 
-    // --------------------------------------------------------
-    // DUT
-    // rename ports here if your RTL uses different names
-    // --------------------------------------------------------
     FpInvSqrt dut (
         .iCLK    (iCLK),
         .iA      (iA),
         .oInvSqrt(oInvSqrt)
     );
 
-    // --------------------------------------------------------
-    // clock
-    // --------------------------------------------------------
     initial begin
         iCLK = 1'b0;
         forever #5 iCLK = ~iCLK;
     end
 
-    // --------------------------------------------------------
-    // main
-    // --------------------------------------------------------
     initial begin
         iA = 27'd0;
         exp_out = 27'd0;
@@ -51,8 +40,7 @@ module tb_fpinvsqrt;
             $finish;
         end
 
-        // let pipeline settle
-        repeat (3) @(posedge iCLK);
+        repeat (3) @(posedge iCLK); // let pipeline settle
 
         while (!$feof(fd_in)) begin
             ret = $fscanf(fd_in, "%h %h\n", iA, exp_out);
