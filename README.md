@@ -117,20 +117,54 @@ python3 Golden/golden_avmm_xy.py \
 
 ## Software Build
 
+We need to add additional software to complete our code. Connect the FPGA board to the network, configure the network interface, update package information, and bring everything up-to-date.
+
+```sh
+ifup eth0
+apt update
+apt upgrade -y
+apt install -y gcc make libusb-1.0-0-dev usbutils
+apt install -y wget
+apt clean
+```
+
+Download and install `linux-headers-4.19.0.tar.gz`, which includes the Makefile for compiling kernel modules.
+
+```sh
+wget https://www.cs.columbia.edu/~sedwards/classes/2025/4840-spring/linux-headers-4.19.0.tar.gz
+tar Pzxf linux-headers-4.19.0.tar.gz
+ls /usr/src/linux-headers-4.19.0
+```
+
+And we should be able to get outputs below
+```sh
+# ls /usr/src/linux-headers-4.19.0
+Documentation  arch   drivers  init   mm            scripts  usr
+Kconfig        block  firmware ipc    modules.order security virt
+Makefile       certs  fs       kernel net           sound
+Module.symvers crypto include  lib    samples       tools
+```
+
+Install the kernel module management programs (e.g., insmod, rmmod).
+
+```sh
+apt install -y kmod
+apt clean
+```
+
 Run software build commands from `Software/`.
 
 Build the userspace simulation/display app:
 
 ```sh
-cd Software
+cd CSEE-4840-N-Body/Software
 make
 ```
 
 Build the Linux kernel modules:
 
 ```sh
-cd Software
-make modules KDIR=/path/to/kernel/build
+make modules
 ```
 
 Load the drivers on the board after the FPGA image and matching device tree are in place:
